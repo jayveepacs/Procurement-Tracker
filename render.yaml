@@ -1,0 +1,9 @@
+# Render Blueprint - static site deployment
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: procurement-dashboard
+    runtime: static
+    buildCommand: ""
+    staticPublishPath: .
+    pullRequestPreviewsEnabled: false

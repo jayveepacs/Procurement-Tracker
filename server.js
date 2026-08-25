@@ -4,7 +4,8 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const PORT = 5173;
+const PORT = process.env.PORT || 5173;
+const HOST = process.env.HOST || '0.0.0.0';
 const types = {
   '.html': 'text/html',
   '.js': 'text/javascript',
@@ -21,4 +22,4 @@ http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream' });
     res.end(data);
   });
-}).listen(PORT, () => console.log('Server running at http://localhost:' + PORT));
+}).listen(PORT, HOST, () => console.log('Server running on port ' + PORT));
