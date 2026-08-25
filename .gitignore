@@ -1,0 +1,12 @@
+# Do NOT publish real company data
+*.xlsx
+*.xls
+
+# Node / tooling
+node_modules/
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/

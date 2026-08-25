@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Thaison Procurement Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              dark: '#1e4d3a',
+              DEFAULT: '#2e7d52',
+              light: '#4caf7d',
+              pale: '#e8f3ec',
+              accent: '#7cbf9a'
+            }
+          },
+          fontFamily: { sans: ['Inter', 'Segoe UI', 'system-ui', 'sans-serif'] }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { background: #f4f6f5; }
+    .card { background:#fff; border:1px solid #eef1ef; border-radius:14px; box-shadow:0 1px 2px rgba(16,24,40,.04); }
+    .nav-item { transition: all .15s ease; }
+    .nav-item:hover { background: rgba(255,255,255,.08); }
+    .nav-item.active { background: rgba(255,255,255,.14); border-left:3px solid #7cbf9a; }
+    ::-webkit-scrollbar { width:8px; height:8px; }
+    ::-webkit-scrollbar-thumb { background:#cbd5d0; border-radius:8px; }
+    .diag-bg { background: linear-gradient(135deg,#1e4d3a 0%,#2e7d52 100%); }
+  </style>
+</head>
+<body class="font-sans text-slate-700">
+  <div class="flex min-h-screen">
+    <!-- Sidebar -->
+    <aside class="w-60 diag-bg text-white flex flex-col fixed h-screen z-20">
+      <div class="px-5 py-5 border-b border-white/10">
+        <div class="flex items-center gap-2">
+          <div class="bg-white text-brand-dark font-extrabold rounded-md w-9 h-9 flex items-center justify-center text-lg">T</div>
+          <div>
+            <div class="font-extrabold tracking-wide leading-none text-lg">THAISON</div>
+            <div class="text-[9px] tracking-[.2em] text-brand-accent">BUILDER &amp; DEVELOPER INC.</div>
+          </div>
+        </div>
+      </div>
+      <nav id="nav" class="flex-1 py-4 text-sm">
+        <a data-view="dashboard" class="nav-item active flex items-center gap-3 px-5 py-3 cursor-pointer">📊 <span>Dashboard</span></a>
+        <a data-view="orders" class="nav-item flex items-center gap-3 px-5 py-3 cursor-pointer">📋 <span>Purchase Orders</span></a>
+        <a data-view="suppliers" class="nav-item flex items-center gap-3 px-5 py-3 cursor-pointer">👥 <span>Suppliers</span></a>
+        <a data-view="deliveries" class="nav-item flex items-center gap-3 px-5 py-3 cursor-pointer">🚚 <span>Deliveries</span></a>
+        <a data-view="add" class="nav-item flex items-center gap-3 px-5 py-3 cursor-pointer">➕ <span>Add / Input Data</span></a>
+        <a data-view="settings" class="nav-item flex items-center gap-3 px-5 py-3 cursor-pointer">⚙️ <span>Settings</span></a>
+      </nav>
+      <div class="px-5 py-4 text-[11px] text-brand-accent border-t border-white/10">ACM Landholdings, Inc.</div>
+    </aside>
+
+    <!-- Main -->
+    <main class="flex-1 ml-60">
+      <!-- Top bar -->
+      <header class="bg-white border-b border-slate-100 px-8 py-4 flex items-center justify-between sticky top-0 z-10">
+        <div>
+          <h1 class="text-2xl font-extrabold text-brand-dark tracking-tight">PROCUREMENT DASHBOARD</h1>
+          <p class="text-xs text-slate-400">Real-time overview of procurement activities and performance</p>
+        </div>
+        <div class="flex items-end gap-3">
+          <div>
+            <label class="block text-[10px] text-slate-400 mb-1">Project</label>
+            <select id="projectFilter" class="border border-slate-200 rounded-lg text-sm px-3 py-2 bg-white min-w-[150px]">
+              <option value="">All Projects</option>
+            </select>
+          </div>
+          <label class="bg-brand hover:bg-brand-dark text-white text-sm font-semibold px-4 py-2 rounded-lg cursor-pointer flex items-center gap-2">
+            ⬆️ Import Excel
+            <input id="fileInput" type="file" accept=".xlsx,.xls" class="hidden" />
+          </label>
+          <button id="exportBtn" class="border border-slate-200 text-slate-600 text-sm font-semibold px-4 py-2 rounded-lg hover:bg-slate-50">⬇️ Export</button>
+        </div>
+      </header>
+
+      <!-- Empty state -->
+      <div id="emptyState" class="hidden px-8 py-20 text-center">
+        <div class="max-w-md mx-auto card p-10">
+          <div class="text-5xl mb-4">📂</div>
+          <h2 class="text-lg font-bold text-brand-dark mb-2">No data loaded yet</h2>
+          <p class="text-sm text-slate-500 mb-6">Populate the dashboard in one of two ways: import your Purchase Order Excel file (e.g. <b>NAV PO 2022 ACM Landholdings.xlsx</b>), or add records manually one by one.</p>
+          <div class="flex flex-col sm:flex-row gap-3 justify-center">
+            <label class="inline-block bg-brand hover:bg-brand-dark text-white text-sm font-semibold px-5 py-2.5 rounded-lg cursor-pointer">
+              Import Excel File
+              <input id="fileInput2" type="file" accept=".xlsx,.xls" class="hidden" />
+            </label>
+            <button id="addManualBtn" class="inline-block border border-brand text-brand hover:bg-brand-pale text-sm font-semibold px-5 py-2.5 rounded-lg">
+              ➕ Add Record Manually
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div id="views" class="p-8 space-y-6"></div>
+    </main>
+  </div>
+
+  <div id="toast" class="fixed bottom-6 right-6 bg-brand-dark text-white text-sm px-4 py-3 rounded-lg shadow-lg opacity-0 transition-opacity z-50"></div>
+
+  <script src="metrics.js"></script>
+  <script src="views.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
