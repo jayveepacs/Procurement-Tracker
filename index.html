@@ -57,7 +57,7 @@
         <a data-view="add" class="nav-item flex items-center gap-3 px-5 py-3 cursor-pointer">➕ <span>Add / Input Data</span></a>
         <a data-view="settings" class="nav-item flex items-center gap-3 px-5 py-3 cursor-pointer">⚙️ <span>Settings</span></a>
       </nav>
-      <div class="px-5 py-4 text-[11px] text-brand-accent border-t border-white/10">ACM Landholdings, Inc.</div>
+      <div class="px-5 py-4 text-[11px] text-brand-accent border-t border-white/10">THAISON</div>
     </aside>
 
     <!-- Main -->
@@ -97,6 +97,9 @@
             <button id="addManualBtn" class="inline-block border border-brand text-brand hover:bg-brand-pale text-sm font-semibold px-5 py-2.5 rounded-lg">
               ➕ Add Record Manually
             </button>
+            <button id="sampleDataBtn" class="inline-block border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-semibold px-5 py-2.5 rounded-lg">
+              🧪 Load Sample Data
+            </button>
           </div>
         </div>
       </div>
@@ -107,8 +110,15 @@
 
   <div id="toast" class="fixed bottom-6 right-6 bg-brand-dark text-white text-sm px-4 py-3 rounded-lg shadow-lg opacity-0 transition-opacity z-50"></div>
 
+  <!-- Firebase (compat SDK exposes a global 'firebase') -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+  <script src="firebase-config.js"></script>
   <script src="metrics.js"></script>
   <script src="views.js"></script>
+  <script src="auth.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

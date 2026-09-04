@@ -21,6 +21,26 @@ function badge(status) {
   return `<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold ${map[cls]}">${s(status) || 'Pending'}</span>`;
 }
 
+const STATUS_OPTIONS = ['ON-GOING', 'FOR DELIVERY', 'PARTIAL', 'SERVED', 'CANCELLED'];
+
+// Editable status dropdown bound to a record's position in STATE.rows
+function statusSelect(record) {
+  const idx = STATE.rows.indexOf(record);
+  const cur = s(record.status);
+  const opts = [...STATUS_OPTIONS];
+  if (cur && !opts.some(o => o.toUpperCase() === cur.toUpperCase())) opts.unshift(cur);
+  const colorMap = {
+    served: 'text-green-700 bg-green-50 border-green-200',
+    partial: 'text-blue-700 bg-blue-50 border-blue-200',
+    pending: 'text-amber-700 bg-amber-50 border-amber-200',
+    cancelled: 'text-red-700 bg-red-50 border-red-200'
+  };
+  const color = colorMap[statusClass(cur)];
+  return `<select data-idx="${idx}" class="status-select text-[10px] font-semibold rounded-full px-2 py-1 border cursor-pointer outline-none ${color}">
+    ${opts.map(o => `<option value="${o}" ${o.toUpperCase() === cur.toUpperCase() ? 'selected' : ''}>${o}</option>`).join('')}
+  </select>`;
+}
+
 function renderOrders() {
   const views = document.getElementById('views');
   let rows = currentRows();
@@ -33,7 +53,7 @@ function renderOrders() {
       let v = r[k];
       if (DATE_KEYS.has(k)) v = excelDate(v);
       else if (k === 'total' || k === 'price') v = num(v) ? pesoFull(v) : '';
-      else if (k === 'status') return `<td class="px-3 py-2">${badge(r.status)}</td>`;
+      else if (k === 'status') return `<td class="px-3 py-2">${statusSelect(r)}</td>`;
       else v = s(v);
       const cls = (k === 'material' || k === 'vendor') ? 'max-w-[200px] truncate' : '';
       return `<td class="px-3 py-2 ${cls}" title="${s(r[k])}">${v}</td>`;
@@ -105,7 +125,7 @@ function renderDeliveries() {
     <td class="px-3 py-2 max-w-[220px] truncate" title="${s(r.material)}">${s(r.material)}</td>
     <td class="px-3 py-2">${excelDate(r.poDateNeeded)}</td>
     <td class="px-3 py-2">${num(r.leadTime) || '-'}</td>
-    <td class="px-3 py-2">${badge(r.status)}</td>
+    <td class="px-3 py-2">${statusSelect(r)}</td>
   </tr>`).join('');
   document.getElementById('views').innerHTML = `
     <div class="grid grid-cols-1 md:grid-cols-4 gap-5">
@@ -133,10 +153,12 @@ function renderDeliveries() {
 }
 
 const FORM_FIELDS = [
-  ['pr', 'PR#'], ['po', 'PO#'], ['poDate', 'PO Date'], ['vendor', 'Vendor Name'],
+  ['pr', 'MRS/SRS Number'], ['prfDate', 'MRS/SRS Date'], ['prfReceived', 'MRS/SRS Date Received'],
+  ['po', 'PO#'], ['poDate', 'PO Date'], ['vendor', 'Vendor Name'],
   ['material', 'Material Description'], ['qty', 'Quantity'], ['unit', 'Unit'],
   ['price', 'Unit Price'], ['total', 'Total'], ['project', 'Project'],
-  ['department', 'Department'], ['terms', 'Terms'], ['status', 'Status']
+  ['department', 'Department'], ['terms', 'Terms'], ['status', 'Status'],
+  ['remarks', 'Remarks']
 ];
 
 function renderAdd() {
@@ -145,11 +167,24 @@ function renderAdd() {
       <div class="text-sm font-bold text-brand-dark uppercase tracking-wide mb-1">Add Purchase Order Record</div>
       <p class="text-xs text-slate-400 mb-5">Manually input a record. It is added to the current dataset and saved in your browser.</p>
       <form id="addForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        ${FORM_FIELDS.map(([k, l]) => `
-          <div>
+        ${FORM_FIELDS.map(([k, l]) => {
+          let field;
+          if (k === 'status') {
+            field = `<select name="${k}" class="w-full border border-slate-200 rounded-lg text-sm px-3 py-2 bg-white">
+                   ${STATUS_OPTIONS.map(o => `<option value="${o}">${o}</option>`).join('')}
+                 </select>`;
+          } else if (k === 'remarks') {
+            field = `<textarea name="${k}" rows="2" class="w-full border border-slate-200 rounded-lg text-sm px-3 py-2"></textarea>`;
+          } else if (DATE_KEYS.has(k)) {
+            field = `<input name="${k}" type="date" class="w-full border border-slate-200 rounded-lg text-sm px-3 py-2" />`;
+          } else {
+            field = `<input name="${k}" class="w-full border border-slate-200 rounded-lg text-sm px-3 py-2" />`;
+          }
+          return `<div class="${k === 'remarks' ? 'md:col-span-2' : ''}">
             <label class="block text-xs font-medium text-slate-500 mb-1">${l}</label>
-            <input name="${k}" ${k === 'poDate' ? 'type="date"' : ''} class="w-full border border-slate-200 rounded-lg text-sm px-3 py-2" />
-          </div>`).join('')}
+            ${field}
+          </div>`;
+        }).join('')}
         <div class="md:col-span-2 flex gap-3 pt-2">
           <button type="submit" class="bg-brand hover:bg-brand-dark text-white text-sm font-semibold px-5 py-2.5 rounded-lg">Add Record</button>
           <button type="reset" class="border border-slate-200 text-slate-600 text-sm px-5 py-2.5 rounded-lg hover:bg-slate-50">Clear</button>
@@ -157,7 +192,7 @@ function renderAdd() {
       </form>
     </div>`;
 
-  document.getElementById('addForm').addEventListener('submit', e => {
+  document.getElementById('addForm').addEventListener('submit', async e => {
     e.preventDefault();
     const fd = new FormData(e.target);
     const rec = {};
@@ -165,19 +200,23 @@ function renderAdd() {
     // auto compute total if empty
     if (!num(rec.total) && num(rec.qty) && num(rec.price)) rec.total = num(rec.qty) * num(rec.price);
     if (!s(rec.po) && !s(rec.vendor) && !s(rec.material)) { toast('Please fill at least PO#, Vendor or Material'); return; }
-    STATE.rows.push(rec);
-    save();
-    buildProjectFilter();
-    toast('Record added. Total records: ' + STATE.rows.length);
-    e.target.reset();
+    try {
+      await addRecord(rec);
+      toast('Record added. Total records: ' + STATE.rows.length);
+      e.target.reset();
+    } catch (err) { toast('Failed to add: ' + err.message); }
   });
 }
 
 function renderSettings() {
+  const mode = DB && DB.mode === 'cloud' ? 'Cloud (Firebase - shared)' : 'Local (this browser only)';
+  const who = (typeof CURRENT_USER !== 'undefined' && CURRENT_USER) ? `${CURRENT_USER.email} (${CURRENT_USER.role})` : 'not signed in';
   document.getElementById('views').innerHTML = `
     <div class="card p-6 max-w-2xl space-y-5">
       <div>
         <div class="text-sm font-bold text-brand-dark uppercase tracking-wide mb-2">Dataset</div>
+        <p class="text-xs text-slate-500">Storage mode: <b>${mode}</b></p>
+        <p class="text-xs text-slate-500">Signed in as: <b>${who}</b></p>
         <p class="text-xs text-slate-500">Source: <b>${STATE.source || 'manual / none'}</b></p>
         <p class="text-xs text-slate-500">Records loaded: <b>${STATE.rows.length.toLocaleString()}</b></p>
       </div>
@@ -186,15 +225,17 @@ function renderSettings() {
           Import Excel<input id="fileInput3" type="file" accept=".xlsx,.xls" class="hidden" />
         </label>
         <button id="exportBtn2" class="border border-slate-200 text-slate-600 text-sm px-4 py-2 rounded-lg hover:bg-slate-50">Export to Excel</button>
+        <button id="sampleBtn" class="border border-brand text-brand text-sm px-4 py-2 rounded-lg hover:bg-brand-pale">Load Sample Data</button>
         <button id="clearBtn" class="border border-red-200 text-red-600 text-sm px-4 py-2 rounded-lg hover:bg-red-50">Clear All Data</button>
       </div>
-      <p class="text-[11px] text-slate-400">Data is stored only in your browser (localStorage). Nothing is uploaded to any server.</p>
+      <p class="text-[11px] text-slate-400">Local mode keeps data in this browser only. Cloud mode (Firebase) shares data across your approved team.</p>
     </div>`;
   document.getElementById('fileInput3').addEventListener('change', e => handleFile(e.target.files[0]));
   document.getElementById('exportBtn2').addEventListener('click', exportExcel);
-  document.getElementById('clearBtn').addEventListener('click', () => {
-    if (confirm('Clear all loaded data? This cannot be undone.')) {
-      STATE = { rows: [], source: '' }; save(); buildProjectFilter(); render(); toast('Data cleared');
+  document.getElementById('sampleBtn').addEventListener('click', loadSampleData);
+  document.getElementById('clearBtn').addEventListener('click', async () => {
+    if (confirm('Clear all data? This cannot be undone.')) {
+      await DB.clear(); STATE.rows = []; STATE.source = ''; buildProjectFilter(); render(); toast('Data cleared');
     }
   });
 }

@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function myDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function isApproved() {
+      return isSignedIn() && myDoc().status == 'approved';
+    }
+    function isAdmin() {
+      return isSignedIn() && myDoc().role == 'admin';
+    }
+
+    // User profiles: a person may create ONLY their own pending profile.
+    match /users/{uid} {
+      allow create: if isSignedIn()
+                    && request.auth.uid == uid
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.role == 'member';
+      // read own doc, or admins read everyone
+      allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+      // only admins can approve / change roles / delete
+      allow update, delete: if isAdmin();
+    }
+
+    // Purchase orders: only APPROVED users can read or write.
+    match /purchase_orders/{id} {
+      allow read, create, update, delete: if isApproved();
+    }
+  }
+}

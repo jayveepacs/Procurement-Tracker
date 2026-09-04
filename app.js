@@ -1,8 +1,6 @@
 /* Thaison Procurement Dashboard - data logic */
 'use strict';
 
-const STORAGE_KEY = 'thaison_po_data_v1';
-
 // Header text -> internal key. Matching is done case-insensitively and trimmed.
 const HEADER_MAP = {
   'ACTUAL PRF DATE': 'prfDate',
@@ -124,33 +122,38 @@ function parseWorkbook(data) {
 function handleFile(file) {
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = e => {
+  reader.onload = async e => {
     try {
       const rows = parseWorkbook(new Uint8Array(e.target.result));
       if (!rows.length) { toast('No rows found in file'); return; }
-      STATE.rows = rows;
+      toast('Importing ' + rows.length + ' records...');
+      await DB.replaceAll(rows, file.name);
+      STATE.rows = await DB.loadAll();
       STATE.source = file.name;
-      save();
       buildProjectFilter();
       render();
-      toast('Imported ' + rows.length + ' records from ' + file.name);
+      toast('Imported ' + STATE.rows.length + ' records from ' + file.name);
     } catch (err) {
       console.error(err);
-      toast('Failed to read file: ' + err.message);
+      toast('Failed to import: ' + err.message);
     }
   };
   reader.readAsArrayBuffer(file);
 }
 
-/* ---------- persistence ---------- */
-function save() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE)); } catch (e) {}
+/* ---------- data operations (via DB repository) ---------- */
+async function addRecord(rec) {
+  const id = await DB.add(rec);
+  rec._id = id;
+  STATE.rows.push(rec);
+  buildProjectFilter();
+  render();
 }
-function load() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) STATE = JSON.parse(raw);
-  } catch (e) {}
+
+async function boot() {
+  STATE.rows = await DB.loadAll();
+  buildProjectFilter();
+  render();
 }
 
 /* ---------- project filter ---------- */
@@ -169,7 +172,10 @@ function exportExcel() {
   Object.entries(HEADER_MAP).forEach(([label, key]) => (inv[key] = label));
   const data = STATE.rows.map(r => {
     const o = {};
-    Object.keys(r).forEach(k => (o[inv[k] || k] = r[k]));
+    Object.keys(r).forEach(k => {
+      if (k === '_id' || k === '_created') return; // internal fields
+      o[inv[k] || k] = r[k];
+    });
     return o;
   });
   const ws = XLSX.utils.json_to_sheet(data);
@@ -193,19 +199,22 @@ function render() {
     suppliers: renderSuppliers,
     deliveries: renderDeliveries,
     add: renderAdd,
-    settings: renderSettings
+    settings: renderSettings,
+    admin: renderAdmin
   };
   (map[currentView] || renderDashboard)();
 }
 
+// views that should render even with no data loaded
+const NO_DATA_VIEWS = ['add', 'settings', 'admin'];
+
 function setView(v) {
   currentView = v;
   $$('#nav .nav-item').forEach(a => a.classList.toggle('active', a.dataset.view === v));
-  // add + settings should show even with no data
-  if ((v === 'add' || v === 'settings') && !STATE.rows.length) {
+  if (NO_DATA_VIEWS.includes(v) && !STATE.rows.length) {
     document.getElementById('emptyState').classList.add('hidden');
     document.getElementById('views').classList.remove('hidden');
-    (v === 'add' ? renderAdd : renderSettings)();
+    ({ add: renderAdd, settings: renderSettings, admin: renderAdmin })[v]();
     return;
   }
   render();
@@ -213,9 +222,6 @@ function setView(v) {
 
 /* ---------- init ---------- */
 function init() {
-  load();
-  buildProjectFilter();
-
   $$('#nav .nav-item').forEach(a => a.addEventListener('click', () => setView(a.dataset.view)));
 
   ['fileInput', 'fileInput2'].forEach(id => {
@@ -224,10 +230,31 @@ function init() {
   });
   document.getElementById('projectFilter').addEventListener('change', render);
   document.getElementById('exportBtn').addEventListener('click', exportExcel);
+
+  // Editable status dropdowns (event delegation - #views persists across renders)
+  document.getElementById('views').addEventListener('change', async e => {
+    const sel = e.target.closest('.status-select');
+    if (!sel) return;
+    const idx = parseInt(sel.dataset.idx, 10);
+    if (isNaN(idx) || !STATE.rows[idx]) return;
+    const rec = STATE.rows[idx];
+    rec.status = sel.value;
+    try { await DB.update(rec._id, { status: sel.value }); } catch (err) { toast('Save failed: ' + err.message); }
+    render();
+    toast('Status updated to "' + sel.value + '"');
+  });
   const addManual = document.getElementById('addManualBtn');
   if (addManual) addManual.addEventListener('click', () => setView('add'));
+  const sampleBtn = document.getElementById('sampleDataBtn');
+  if (sampleBtn) sampleBtn.addEventListener('click', () => loadSampleData());
 
-  render();
+  // Choose data source: Firebase cloud (with login + approval) or local browser storage
+  if (typeof FIREBASE_ENABLED !== 'undefined' && FIREBASE_ENABLED) {
+    startAuth(boot);           // shows login; calls boot() once approved
+  } else {
+    DB = LocalDB;
+    boot();
+  }
 }
 
 document.addEventListener('DOMContentLoaded', init);
