@@ -31,5 +31,13 @@ service cloud.firestore {
     match /purchase_orders/{id} {
       allow read, create, update, delete: if isApproved();
     }
+
+    // Activity log: approved users can append entries; only admins can read.
+    // No one can edit or delete entries (tamper-resistant).
+    match /activity_log/{id} {
+      allow create: if isApproved();
+      allow read: if isAdmin();
+      allow update, delete: if false;
+    }
   }
 }

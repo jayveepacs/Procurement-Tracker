@@ -235,7 +235,9 @@ function renderSettings() {
   document.getElementById('sampleBtn').addEventListener('click', loadSampleData);
   document.getElementById('clearBtn').addEventListener('click', async () => {
     if (confirm('Clear all data? This cannot be undone.')) {
-      await DB.clear(); STATE.rows = []; STATE.source = ''; buildProjectFilter(); render(); toast('Data cleared');
+      await DB.clear(); STATE.rows = []; STATE.source = ''; buildProjectFilter(); render();
+      if (typeof logActivity === 'function') logActivity('Clear data', 'All purchase order records cleared');
+      toast('Data cleared');
     }
   });
 }

@@ -213,15 +213,25 @@ function setupUserChrome() {
       bar.appendChild(btn);
     }
   }
-  // admin nav item
-  if (CURRENT_USER && CURRENT_USER.role === 'admin' && !document.querySelector('[data-view="admin"]')) {
+  // admin-only nav items
+  if (CURRENT_USER && CURRENT_USER.role === 'admin') {
     const nav = document.getElementById('nav');
-    const a = document.createElement('a');
-    a.dataset.view = 'admin';
-    a.className = 'nav-item flex items-center gap-3 px-5 py-3 cursor-pointer';
-    a.innerHTML = '🛡️ <span>Admin</span>';
-    a.addEventListener('click', () => setView('admin'));
-    nav.appendChild(a);
+    if (!document.querySelector('[data-view="admin"]')) {
+      const a = document.createElement('a');
+      a.dataset.view = 'admin';
+      a.className = 'nav-item flex items-center gap-3 px-5 py-3 cursor-pointer';
+      a.innerHTML = '🛡️ <span>Admin</span>';
+      a.addEventListener('click', () => setView('admin'));
+      nav.appendChild(a);
+    }
+    if (!document.querySelector('[data-view="log"]')) {
+      const b = document.createElement('a');
+      b.dataset.view = 'log';
+      b.className = 'nav-item flex items-center gap-3 px-5 py-3 cursor-pointer';
+      b.innerHTML = '📜 <span>Activity Log</span>';
+      b.addEventListener('click', () => setView('log'));
+      nav.appendChild(b);
+    }
   }
 }
 
@@ -282,7 +292,12 @@ function drawAdminList(users) {
       const patch = act === 'approve' ? { status: 'approved' }
         : act === 'reject' ? { status: 'rejected' }
         : { role: 'admin', status: 'approved' };
-      try { await fbDb.collection('users').doc(uid).update(patch); toast('User updated'); renderAdmin(); }
+      try {
+        await fbDb.collection('users').doc(uid).update(patch);
+        const label = act === 'approve' ? 'Approved user' : act === 'reject' ? 'Rejected user' : 'Promoted user to admin';
+        logActivity('User access', label + ' (' + uid + ')');
+        toast('User updated'); renderAdmin();
+      }
       catch (e) { toast('Failed: ' + e.message); }
     };
   });
@@ -321,4 +336,52 @@ async function loadSampleData() {
   buildProjectFilter();
   render();
   toast('Loaded ' + rows.length + ' sample records');
+}
+
+/* ---------- Activity log (admin-only view) ---------- */
+async function logActivity(action, detail) {
+  // Only in cloud mode with a signed-in user. Non-fatal on failure.
+  if (!fbDb || !CURRENT_USER) return;
+  try {
+    await fbDb.collection('activity_log').add({
+      userEmail: CURRENT_USER.email || '',
+      userUid: CURRENT_USER.uid || '',
+      action: action || '',
+      detail: detail || '',
+      ts: Date.now()
+    });
+  } catch (e) { /* logging must never break the app */ }
+}
+
+async function renderLog() {
+  const views = document.getElementById('views');
+  views.innerHTML = `<div class="card p-5">
+    <div class="text-sm font-bold text-brand-dark uppercase tracking-wide mb-4">Activity Log</div>
+    <div id="logBody" class="text-sm text-slate-400">Loading activity...</div>
+  </div>`;
+  if (!fbDb) { document.getElementById('logBody').textContent = 'Activity log is available in cloud (Firebase) mode only.'; return; }
+  let entries = [];
+  try {
+    const snap = await fbDb.collection('activity_log').orderBy('ts', 'desc').limit(500).get();
+    snap.forEach(d => entries.push(d.data()));
+  } catch (e) {
+    document.getElementById('logBody').textContent = 'Could not load activity log: ' + e.message;
+    return;
+  }
+  if (!entries.length) { document.getElementById('logBody').textContent = 'No activity recorded yet.'; return; }
+  const rows = entries.map(en => `<tr class="border-t border-slate-100">
+    <td class="px-3 py-2 whitespace-nowrap text-slate-500">${new Date(en.ts).toLocaleString()}</td>
+    <td class="px-3 py-2">${en.userEmail || '-'}</td>
+    <td class="px-3 py-2"><span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-brand-pale text-brand-dark">${en.action}</span></td>
+    <td class="px-3 py-2 text-slate-600">${en.detail || ''}</td>
+  </tr>`).join('');
+  document.getElementById('logBody').outerHTML = `<div id="logBody" class="overflow-auto max-h-[70vh] border border-slate-100 rounded-lg">
+    <table class="w-full text-xs">
+      <thead class="bg-brand-pale text-brand-dark sticky top-0"><tr>
+        <th class="px-3 py-2 text-left font-semibold">When</th>
+        <th class="px-3 py-2 text-left font-semibold">User</th>
+        <th class="px-3 py-2 text-left font-semibold">Action</th>
+        <th class="px-3 py-2 text-left font-semibold">Details</th>
+      </tr></thead><tbody>${rows}</tbody>
+    </table></div>`;
 }

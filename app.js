@@ -132,6 +132,7 @@ function handleFile(file) {
       STATE.source = file.name;
       buildProjectFilter();
       render();
+      if (typeof logActivity === 'function') logActivity('Import', 'Imported ' + rows.length + ' records from ' + file.name);
       toast('Imported ' + STATE.rows.length + ' records from ' + file.name);
     } catch (err) {
       console.error(err);
@@ -148,6 +149,7 @@ async function addRecord(rec) {
   STATE.rows.push(rec);
   buildProjectFilter();
   render();
+  if (typeof logActivity === 'function') logActivity('Add record', [rec.po, rec.vendor, rec.material].filter(Boolean).join(' | '));
 }
 
 async function boot() {
@@ -200,13 +202,14 @@ function render() {
     deliveries: renderDeliveries,
     add: renderAdd,
     settings: renderSettings,
-    admin: renderAdmin
+    admin: renderAdmin,
+    log: renderLog
   };
   (map[currentView] || renderDashboard)();
 }
 
 // views that should render even with no data loaded
-const NO_DATA_VIEWS = ['add', 'settings', 'admin'];
+const NO_DATA_VIEWS = ['add', 'settings', 'admin', 'log'];
 
 function setView(v) {
   currentView = v;
@@ -214,7 +217,7 @@ function setView(v) {
   if (NO_DATA_VIEWS.includes(v) && !STATE.rows.length) {
     document.getElementById('emptyState').classList.add('hidden');
     document.getElementById('views').classList.remove('hidden');
-    ({ add: renderAdd, settings: renderSettings, admin: renderAdmin })[v]();
+    ({ add: renderAdd, settings: renderSettings, admin: renderAdmin, log: renderLog })[v]();
     return;
   }
   render();
@@ -238,9 +241,11 @@ function init() {
     const idx = parseInt(sel.dataset.idx, 10);
     if (isNaN(idx) || !STATE.rows[idx]) return;
     const rec = STATE.rows[idx];
+    const oldStatus = rec.status || '(none)';
     rec.status = sel.value;
     try { await DB.update(rec._id, { status: sel.value }); } catch (err) { toast('Save failed: ' + err.message); }
     render();
+    if (typeof logActivity === 'function') logActivity('Status change', (rec.po || rec.pr || rec.material || 'record') + ': ' + oldStatus + ' -> ' + sel.value);
     toast('Status updated to "' + sel.value + '"');
   });
   const addManual = document.getElementById('addManualBtn');
