@@ -44,6 +44,11 @@ const LocalDB = {
     if (r) Object.assign(r, patch);
     this._write(store);
   },
+  async remove(id) {
+    const store = this._read();
+    store.rows = store.rows.filter(x => x._id !== id);
+    this._write(store);
+  },
   async clear() { this._write({ rows: [], source: '' }); }
 };
 
@@ -74,6 +79,7 @@ const CloudDB = {
     return ref.id;
   },
   async update(id, patch) { await this.col().doc(id).update(patch); },
+  async remove(id) { await this.col().doc(id).delete(); },
   async clear() {
     const snap = await this.col().get();
     for (let i = 0; i < snap.docs.length; i += 400) {

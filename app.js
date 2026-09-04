@@ -40,6 +40,8 @@ const HEADER_MAP = {
   'DR DATE': 'drDate',
   'PO TO DR': 'poToDr',
   'STATUS': 'status',
+  'PAYMENT PROCESSING STATUS': 'paymentStatus',
+  'PAYMENT DATE': 'paidDate',
   'NOTES': 'notes',
   'PURPOSE': 'purpose'
 };
@@ -152,6 +154,30 @@ async function addRecord(rec) {
   if (typeof logActivity === 'function') logActivity('Add record', [rec.po, rec.vendor, rec.material].filter(Boolean).join(' | '));
 }
 
+async function updateRecord(id, patch) {
+  await DB.update(id, patch);
+  const rec = STATE.rows.find(r => r._id === id);
+  if (rec) Object.assign(rec, patch);
+  buildProjectFilter();
+  render();
+  if (typeof logActivity === 'function') logActivity('Edit record', [patch.po, patch.vendor, patch.material].filter(Boolean).join(' | '));
+}
+
+async function deleteRecord(id) {
+  const rec = STATE.rows.find(r => r._id === id);
+  await DB.remove(id);
+  STATE.rows = STATE.rows.filter(r => r._id !== id);
+  buildProjectFilter();
+  render();
+  if (typeof logActivity === 'function') logActivity('Delete record', rec ? [rec.po, rec.vendor, rec.material].filter(Boolean).join(' | ') : String(id));
+}
+
+// Admin check: in cloud mode requires admin role; in local (single-user) mode always true
+function isAdminUser() {
+  if (DB && DB.mode === 'cloud') return typeof CURRENT_USER !== 'undefined' && CURRENT_USER && CURRENT_USER.role === 'admin';
+  return true;
+}
+
 async function boot() {
   STATE.rows = await DB.loadAll();
   buildProjectFilter();
@@ -200,6 +226,7 @@ function render() {
     orders: renderOrders,
     suppliers: renderSuppliers,
     deliveries: renderDeliveries,
+    payment: renderPayment,
     add: renderAdd,
     settings: renderSettings,
     admin: renderAdmin,
@@ -234,19 +261,48 @@ function init() {
   document.getElementById('projectFilter').addEventListener('change', render);
   document.getElementById('exportBtn').addEventListener('click', exportExcel);
 
-  // Editable status dropdowns (event delegation - #views persists across renders)
+  // Editable status / payment dropdowns (event delegation - #views persists across renders)
   document.getElementById('views').addEventListener('change', async e => {
-    const sel = e.target.closest('.status-select');
+    const statusSel = e.target.closest('.status-select');
+    const paySel = e.target.closest('.payment-select');
+    const sel = statusSel || paySel;
     if (!sel) return;
     const idx = parseInt(sel.dataset.idx, 10);
     if (isNaN(idx) || !STATE.rows[idx]) return;
     const rec = STATE.rows[idx];
-    const oldStatus = rec.status || '(none)';
-    rec.status = sel.value;
-    try { await DB.update(rec._id, { status: sel.value }); } catch (err) { toast('Save failed: ' + err.message); }
+    const field = statusSel ? 'status' : 'paymentStatus';
+    const label = statusSel ? 'Status change' : 'Payment status change';
+    const oldVal = rec[field] || '(none)';
+    rec[field] = sel.value;
+    const patch = { [field]: sel.value };
+    // auto-stamp payment date when marked paid
+    if (paySel) {
+      const v = sel.value.toUpperCase();
+      if ((v.includes('FULLY') || v.includes('PARTIAL')) && !s(rec.paidDate)) {
+        rec.paidDate = new Date().toISOString().slice(0, 10);
+        patch.paidDate = rec.paidDate;
+      }
+    }
+    try { await DB.update(rec._id, patch); } catch (err) { toast('Save failed: ' + err.message); }
     render();
-    if (typeof logActivity === 'function') logActivity('Status change', (rec.po || rec.pr || rec.material || 'record') + ': ' + oldStatus + ' -> ' + sel.value);
-    toast('Status updated to "' + sel.value + '"');
+    if (typeof logActivity === 'function') logActivity(label, (rec.po || rec.pr || rec.material || 'record') + ': ' + oldVal + ' -> ' + (sel.value || '(none)'));
+    toast('Updated');
+  });
+
+  // Edit / delete buttons in tables (event delegation)
+  document.getElementById('views').addEventListener('click', async e => {
+    const editBtn = e.target.closest('.row-edit');
+    const delBtn = e.target.closest('.row-del');
+    if (editBtn) { editRecord(editBtn.dataset.edit); return; }
+    if (delBtn) {
+      const id = delBtn.dataset.del;
+      const rec = STATE.rows.find(r => r._id === id);
+      const label = rec ? (rec.po || rec.vendor || rec.material || 'this record') : 'this record';
+      if (confirm('Delete "' + label + '"? This cannot be undone.')) {
+        try { await deleteRecord(id); toast('Record deleted'); }
+        catch (err) { toast('Delete failed: ' + err.message); }
+      }
+    }
   });
   const addManual = document.getElementById('addManualBtn');
   if (addManual) addManual.addEventListener('click', () => setView('add'));

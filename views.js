@@ -4,9 +4,9 @@
 const COLS = [
   ['pr', 'PR#'], ['po', 'PO#'], ['poDate', 'PO Date'], ['vendor', 'Vendor'],
   ['material', 'Material'], ['qty', 'Qty'], ['unit', 'Unit'], ['price', 'Price'],
-  ['total', 'Total'], ['project', 'Project'], ['status', 'Status']
+  ['total', 'Total'], ['project', 'Project'], ['status', 'Status'], ['paymentStatus', 'Payment']
 ];
-const DATE_KEYS = new Set(['poDate', 'prfDate', 'prfReceived', 'poDateNeeded', 'rfpDate', 'mrrDate', 'siDate', 'drDate']);
+const DATE_KEYS = new Set(['poDate', 'prfDate', 'prfReceived', 'poDateNeeded', 'rfpDate', 'mrrDate', 'siDate', 'drDate', 'paidDate']);
 
 let ordersSearch = '';
 
@@ -22,6 +22,34 @@ function badge(status) {
 }
 
 const STATUS_OPTIONS = ['ON-GOING', 'FOR DELIVERY', 'PARTIAL', 'SERVED', 'CANCELLED'];
+const PAYMENT_OPTIONS = ['Pending Payment', 'Partially Paid', 'Fully Paid', 'On Hold'];
+
+function paymentClass(v) {
+  const t = s(v).toUpperCase();
+  if (t.includes('FULLY')) return 'paid';
+  if (t.includes('PARTIAL')) return 'partial';
+  if (t.includes('HOLD')) return 'hold';
+  return 'pending';
+}
+
+// Editable payment-status dropdown bound to a record's position in STATE.rows
+function paymentSelect(record) {
+  const idx = STATE.rows.indexOf(record);
+  const cur = s(record.paymentStatus);
+  const opts = [...PAYMENT_OPTIONS];
+  if (cur && !opts.some(o => o.toUpperCase() === cur.toUpperCase())) opts.unshift(cur);
+  const colorMap = {
+    paid: 'text-green-700 bg-green-50 border-green-200',
+    partial: 'text-blue-700 bg-blue-50 border-blue-200',
+    hold: 'text-red-700 bg-red-50 border-red-200',
+    pending: 'text-amber-700 bg-amber-50 border-amber-200'
+  };
+  const color = colorMap[paymentClass(cur)];
+  return `<select data-idx="${idx}" class="payment-select text-[10px] font-semibold rounded-full px-2 py-1 border cursor-pointer outline-none ${color}">
+    <option value="">— set —</option>
+    ${opts.map(o => `<option value="${o}" ${o.toUpperCase() === cur.toUpperCase() ? 'selected' : ''}>${o}</option>`).join('')}
+  </select>`;
+}
 
 // Editable status dropdown bound to a record's position in STATE.rows
 function statusSelect(record) {
@@ -54,10 +82,15 @@ function renderOrders() {
       if (DATE_KEYS.has(k)) v = excelDate(v);
       else if (k === 'total' || k === 'price') v = num(v) ? pesoFull(v) : '';
       else if (k === 'status') return `<td class="px-3 py-2">${statusSelect(r)}</td>`;
+      else if (k === 'paymentStatus') return `<td class="px-3 py-2">${paymentSelect(r)}</td>`;
       else v = s(v);
       const cls = (k === 'material' || k === 'vendor') ? 'max-w-[200px] truncate' : '';
       return `<td class="px-3 py-2 ${cls}" title="${s(r[k])}">${v}</td>`;
     }).join('')}
+    <td class="px-3 py-2 whitespace-nowrap text-right">
+      <button data-edit="${r._id}" title="Edit" class="row-edit text-brand hover:text-brand-dark px-1.5">✏️</button>
+      <button data-del="${r._id}" title="Delete" class="row-del text-red-500 hover:text-red-700 px-1.5">🗑️</button>
+    </td>
   </tr>`).join('');
 
   views.innerHTML = `
@@ -69,9 +102,9 @@ function renderOrders() {
       <div class="overflow-auto max-h-[70vh] border border-slate-100 rounded-lg">
         <table class="w-full text-xs">
           <thead class="bg-brand-pale text-brand-dark sticky top-0">
-            <tr>${COLS.map(([, l]) => `<th class="px-3 py-2 text-left font-semibold">${l}</th>`).join('')}</tr>
+            <tr>${COLS.map(([, l]) => `<th class="px-3 py-2 text-left font-semibold">${l}</th>`).join('')}<th class="px-3 py-2 text-right font-semibold">Actions</th></tr>
           </thead>
-          <tbody>${body || '<tr><td class="px-3 py-6 text-center text-slate-400" colspan="11">No records</td></tr>'}</tbody>
+          <tbody>${body || '<tr><td class="px-3 py-6 text-center text-slate-400" colspan="13">No records</td></tr>'}</tbody>
         </table>
       </div>
     </div>`;
@@ -158,20 +191,92 @@ const FORM_FIELDS = [
   ['material', 'Material Description'], ['qty', 'Quantity'], ['unit', 'Unit'],
   ['price', 'Unit Price'], ['total', 'Total'], ['project', 'Project'],
   ['department', 'Department'], ['terms', 'Terms'], ['status', 'Status'],
+  ['paymentStatus', 'Payment Processing Status'],
+  ['paidDate', 'Payment Date'],
   ['remarks', 'Remarks']
 ];
 
+function paymentPill(v) {
+  const map = { paid: 'bg-green-100 text-green-700', partial: 'bg-blue-100 text-blue-700', hold: 'bg-red-100 text-red-700', pending: 'bg-amber-100 text-amber-700' };
+  return `<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold ${map[paymentClass(v)]}">${s(v) || 'Pending Payment'}</span>`;
+}
+
+function renderPayment() {
+  const rows = currentRows();
+  // paid = fully or partially paid
+  const paid = rows.filter(r => { const c = paymentClass(r.paymentStatus); return c === 'paid' || c === 'partial'; });
+  const fully = rows.filter(r => paymentClass(r.paymentStatus) === 'paid');
+  const partial = rows.filter(r => paymentClass(r.paymentStatus) === 'partial');
+  const onHold = rows.filter(r => paymentClass(r.paymentStatus) === 'hold');
+  const pending = rows.filter(r => paymentClass(r.paymentStatus) === 'pending');
+
+  const paidAmount = fully.reduce((a, r) => a + num(r.total), 0);
+  const partialAmount = partial.reduce((a, r) => a + num(r.total), 0);
+  const outstanding = pending.concat(onHold).reduce((a, r) => a + num(r.total), 0);
+
+  // sort paid records by payment date (most recent first)
+  const sorted = [...paid].sort((a, b) => (excelDate(b.paidDate) || '').localeCompare(excelDate(a.paidDate) || ''));
+
+  const body = sorted.map(r => `<tr class="border-t border-slate-100 hover:bg-slate-50">
+    <td class="px-3 py-2">${excelDate(r.paidDate) || '<span class="text-slate-300">—</span>'}</td>
+    <td class="px-3 py-2">${s(r.po)}</td>
+    <td class="px-3 py-2 max-w-[180px] truncate" title="${s(r.vendor)}">${s(r.vendor)}</td>
+    <td class="px-3 py-2 max-w-[200px] truncate" title="${s(r.material)}">${s(r.material)}</td>
+    <td class="px-3 py-2 text-right font-semibold text-brand-dark">${num(r.total) ? pesoFull(r.total) : ''}</td>
+    <td class="px-3 py-2">${paymentPill(r.paymentStatus)}</td>
+    <td class="px-3 py-2">${s(r.project)}</td>
+  </tr>`).join('');
+
+  document.getElementById('views').innerHTML = `
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-5">
+      ${kpiCard('Fully Paid', fully.length, peso(paidAmount), '✅', 'bg-green-50')}
+      ${kpiCard('Partially Paid', partial.length, peso(partialAmount), '🧾', 'bg-blue-50')}
+      ${kpiCard('Pending Payment', pending.length, '', '⏳', 'bg-amber-50')}
+      ${kpiCard('On Hold', onHold.length, peso(outstanding) + ' outstanding', '⛔', 'bg-red-50')}
+    </div>
+    <div class="card p-5">
+      <div class="text-sm font-bold text-brand-dark uppercase tracking-wide mb-4">Payment Monitoring <span class="text-slate-400 font-normal">(${paid.length} paid / partially paid)</span></div>
+      <div class="overflow-auto max-h-[65vh] border border-slate-100 rounded-lg">
+        <table class="w-full text-xs">
+          <thead class="bg-brand-pale text-brand-dark sticky top-0"><tr>
+            <th class="px-3 py-2 text-left font-semibold">Payment Date</th>
+            <th class="px-3 py-2 text-left font-semibold">PO#</th>
+            <th class="px-3 py-2 text-left font-semibold">Vendor</th>
+            <th class="px-3 py-2 text-left font-semibold">Material</th>
+            <th class="px-3 py-2 text-right font-semibold">Amount</th>
+            <th class="px-3 py-2 text-left font-semibold">Payment Status</th>
+            <th class="px-3 py-2 text-left font-semibold">Project</th>
+          </tr></thead>
+          <tbody>${body || '<tr><td colspan="7" class="px-3 py-6 text-center text-slate-400">No payments recorded yet. Mark records as paid in the Purchase Orders table.</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+let editingId = null; // when set, the Add form edits this record instead of creating
+
+function editRecord(id) {
+  editingId = id;
+  setView('add');
+}
+
 function renderAdd() {
+  const editing = editingId ? STATE.rows.find(r => r._id === editingId) : null;
   document.getElementById('views').innerHTML = `
     <div class="card p-6 max-w-3xl">
-      <div class="text-sm font-bold text-brand-dark uppercase tracking-wide mb-1">Add Purchase Order Record</div>
-      <p class="text-xs text-slate-400 mb-5">Manually input a record. It is added to the current dataset and saved in your browser.</p>
+      <div class="text-sm font-bold text-brand-dark uppercase tracking-wide mb-1">${editing ? 'Edit' : 'Add'} Purchase Order Record</div>
+      <p class="text-xs text-slate-400 mb-5">${editing ? 'Update this record. Changes sync to the dataset.' : 'Manually input a record. It is added to the current dataset.'}</p>
       <form id="addForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
         ${FORM_FIELDS.map(([k, l]) => {
           let field;
           if (k === 'status') {
             field = `<select name="${k}" class="w-full border border-slate-200 rounded-lg text-sm px-3 py-2 bg-white">
                    ${STATUS_OPTIONS.map(o => `<option value="${o}">${o}</option>`).join('')}
+                 </select>`;
+          } else if (k === 'paymentStatus') {
+            field = `<select name="${k}" class="w-full border border-slate-200 rounded-lg text-sm px-3 py-2 bg-white">
+                   <option value="">— select —</option>
+                   ${PAYMENT_OPTIONS.map(o => `<option value="${o}">${o}</option>`).join('')}
                  </select>`;
           } else if (k === 'remarks') {
             field = `<textarea name="${k}" rows="2" class="w-full border border-slate-200 rounded-lg text-sm px-3 py-2"></textarea>`;
@@ -186,25 +291,49 @@ function renderAdd() {
           </div>`;
         }).join('')}
         <div class="md:col-span-2 flex gap-3 pt-2">
-          <button type="submit" class="bg-brand hover:bg-brand-dark text-white text-sm font-semibold px-5 py-2.5 rounded-lg">Add Record</button>
-          <button type="reset" class="border border-slate-200 text-slate-600 text-sm px-5 py-2.5 rounded-lg hover:bg-slate-50">Clear</button>
+          <button type="submit" class="bg-brand hover:bg-brand-dark text-white text-sm font-semibold px-5 py-2.5 rounded-lg">${editing ? 'Update Record' : 'Add Record'}</button>
+          <button type="button" id="cancelEditBtn" class="border border-slate-200 text-slate-600 text-sm px-5 py-2.5 rounded-lg hover:bg-slate-50">${editing ? 'Cancel' : 'Clear'}</button>
         </div>
       </form>
     </div>`;
 
-  document.getElementById('addForm').addEventListener('submit', async e => {
+  const form = document.getElementById('addForm');
+
+  // prefill when editing
+  if (editing) {
+    FORM_FIELDS.forEach(([k]) => {
+      const el = form.elements[k];
+      if (!el) return;
+      let v = editing[k];
+      if (DATE_KEYS.has(k)) v = excelDate(v); // date inputs need yyyy-mm-dd
+      el.value = v == null ? '' : v;
+    });
+  }
+
+  document.getElementById('cancelEditBtn').addEventListener('click', () => {
+    if (editingId) { editingId = null; setView('orders'); }
+    else form.reset();
+  });
+
+  form.addEventListener('submit', async e => {
     e.preventDefault();
     const fd = new FormData(e.target);
     const rec = {};
     FORM_FIELDS.forEach(([k]) => (rec[k] = s(fd.get(k))));
-    // auto compute total if empty
     if (!num(rec.total) && num(rec.qty) && num(rec.price)) rec.total = num(rec.qty) * num(rec.price);
     if (!s(rec.po) && !s(rec.vendor) && !s(rec.material)) { toast('Please fill at least PO#, Vendor or Material'); return; }
     try {
-      await addRecord(rec);
-      toast('Record added. Total records: ' + STATE.rows.length);
-      e.target.reset();
-    } catch (err) { toast('Failed to add: ' + err.message); }
+      if (editingId) {
+        await updateRecord(editingId, rec);
+        editingId = null;
+        toast('Record updated');
+        setView('orders');
+      } else {
+        await addRecord(rec);
+        toast('Record added. Total records: ' + STATE.rows.length);
+        e.target.reset();
+      }
+    } catch (err) { toast('Failed: ' + err.message); }
   });
 }
 
@@ -226,14 +355,16 @@ function renderSettings() {
         </label>
         <button id="exportBtn2" class="border border-slate-200 text-slate-600 text-sm px-4 py-2 rounded-lg hover:bg-slate-50">Export to Excel</button>
         <button id="sampleBtn" class="border border-brand text-brand text-sm px-4 py-2 rounded-lg hover:bg-brand-pale">Load Sample Data</button>
-        <button id="clearBtn" class="border border-red-200 text-red-600 text-sm px-4 py-2 rounded-lg hover:bg-red-50">Clear All Data</button>
+        ${isAdminUser() ? '<button id="clearBtn" class="border border-red-200 text-red-600 text-sm px-4 py-2 rounded-lg hover:bg-red-50">Clear All Data</button>' : ''}
       </div>
+      ${isAdminUser() ? '' : '<p class="text-[11px] text-slate-400">Only administrators can clear all data.</p>'}
       <p class="text-[11px] text-slate-400">Local mode keeps data in this browser only. Cloud mode (Firebase) shares data across your approved team.</p>
     </div>`;
   document.getElementById('fileInput3').addEventListener('change', e => handleFile(e.target.files[0]));
   document.getElementById('exportBtn2').addEventListener('click', exportExcel);
   document.getElementById('sampleBtn').addEventListener('click', loadSampleData);
-  document.getElementById('clearBtn').addEventListener('click', async () => {
+  const clearBtn = document.getElementById('clearBtn');
+  if (clearBtn) clearBtn.addEventListener('click', async () => {
     if (confirm('Clear all data? This cannot be undone.')) {
       await DB.clear(); STATE.rows = []; STATE.source = ''; buildProjectFilter(); render();
       if (typeof logActivity === 'function') logActivity('Clear data', 'All purchase order records cleared');
