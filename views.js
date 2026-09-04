@@ -2,7 +2,8 @@
 'use strict';
 
 const COLS = [
-  ['pr', 'PR#'], ['po', 'PO#'], ['poDate', 'PO Date'], ['vendor', 'Vendor'],
+  ['pr', 'PR#'], ['prfDate', 'MRS/SRS Date'], ['prfReceived', 'MRS/SRS Received'],
+  ['po', 'PO#'], ['poDate', 'PO Date'], ['vendor', 'Vendor'],
   ['material', 'Material'], ['qty', 'Qty'], ['unit', 'Unit'], ['price', 'Price'],
   ['total', 'Total'], ['project', 'Project'], ['status', 'Status'], ['paymentStatus', 'Payment']
 ];
@@ -104,7 +105,7 @@ function renderOrders() {
           <thead class="bg-brand-pale text-brand-dark sticky top-0">
             <tr>${COLS.map(([, l]) => `<th class="px-3 py-2 text-left font-semibold">${l}</th>`).join('')}<th class="px-3 py-2 text-right font-semibold">Actions</th></tr>
           </thead>
-          <tbody>${body || '<tr><td class="px-3 py-6 text-center text-slate-400" colspan="13">No records</td></tr>'}</tbody>
+          <tbody>${body || '<tr><td class="px-3 py-6 text-center text-slate-400" colspan="15">No records</td></tr>'}</tbody>
         </table>
       </div>
     </div>`;
