@@ -136,6 +136,11 @@ function renderDashboard() {
       ${panel('Spend by Project', '<canvas id="projectChart" height="220"></canvas>')}
       ${panel('Procurement Risk Status', riskPanel(m))}
     </div>
+
+    <!-- Row 5: MRS/SRS received per month -->
+    <div class="grid grid-cols-1 gap-5">
+      ${panel('MRS/SRS Received per Month', '<canvas id="mrsMonthChart" height="90"></canvas>')}
+    </div>
   `;
 
   destroyCharts();
@@ -143,6 +148,46 @@ function renderDashboard() {
   drawStatus(m);
   drawDelivery(m);
   drawProjects(m);
+  drawMrsMonthly(rows);
+}
+
+// Count distinct MRS/SRS numbers received per month (by MRS/SRS Date Received).
+function mrsPerMonth(rows) {
+  const byMonth = {}; // 'YYYY-MM' -> Set of MRS/SRS numbers (or synthetic keys)
+  rows.forEach(r => {
+    const d = excelDate(r.prfReceived); // -> 'YYYY-MM-DD' or '' 
+    if (!/^\d{4}-\d{2}-\d{2}/.test(d)) return;
+    const key = d.slice(0, 7);
+    (byMonth[key] = byMonth[key] || new Set()).add(s(r.pr) || ('row-' + (r._id || Math.random())));
+  });
+  return Object.keys(byMonth).sort().map(k => [k, byMonth[k].size]);
+}
+
+function monthLabel(ym) {
+  const [y, mo] = ym.split('-');
+  const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return names[parseInt(mo, 10) - 1] + ' ' + y;
+}
+
+function drawMrsMonthly(rows) {
+  const ctx = document.getElementById('mrsMonthChart');
+  if (!ctx) return;
+  const data = mrsPerMonth(rows);
+  if (!data.length) {
+    ctx.parentElement.insertAdjacentHTML('beforeend', '<p class="text-sm text-slate-400 mt-2">No MRS/SRS received dates available yet.</p>');
+    return;
+  }
+  CHARTS.mrsMonth = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: data.map(d => monthLabel(d[0])),
+      datasets: [{ label: 'MRS/SRS received', data: data.map(d => d[1]), backgroundColor: '#2e7d52', borderRadius: 6, maxBarThickness: 46 }]
+    },
+    options: {
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.parsed.y + ' MRS/SRS' } } },
+      scales: { y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#f1f5f4' } }, x: { grid: { display: false } } }
+    }
+  });
 }
 
 function topSuppliersTable(m) {
