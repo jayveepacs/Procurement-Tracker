@@ -23,8 +23,13 @@ const HEADER_MAP = {
   'MATERIAL DESCRIPTION': 'material',
   'QTY': 'qty',
   'UNIT': 'unit',
+  'UOM': 'unit',
   'PRICE': 'price',
   'TOTAL': 'total',
+  'TOTAL PRICE': 'total',
+  'PO DELIVERED QTY': 'deliveredQty',
+  'DELIVERED UOM': 'deliveredUnit',
+  'BALANCE TO DELIVER': 'balance',
   'TERMS': 'terms',
   'PROJECT': 'project',
   'DEPARTMENT': 'department',
@@ -145,22 +150,15 @@ function handleFile(file) {
 }
 
 /* ---------- data operations (via DB repository) ---------- */
-async function addRecord(rec) {
-  const id = await DB.add(rec);
-  rec._id = id;
-  STATE.rows.push(rec);
+async function addRecords(recs) {
+  for (const rec of recs) {
+    const id = await DB.add(rec);
+    rec._id = id;
+    STATE.rows.push(rec);
+  }
   buildProjectFilter();
   render();
-  if (typeof logActivity === 'function') logActivity('Add record', [rec.po, rec.vendor, rec.material].filter(Boolean).join(' | '));
-}
-
-async function updateRecord(id, patch) {
-  await DB.update(id, patch);
-  const rec = STATE.rows.find(r => r._id === id);
-  if (rec) Object.assign(rec, patch);
-  buildProjectFilter();
-  render();
-  if (typeof logActivity === 'function') logActivity('Edit record', [patch.po, patch.vendor, patch.material].filter(Boolean).join(' | '));
+  if (typeof logActivity === 'function') logActivity('Add records', recs.length + ' line item(s) added' + (recs[0] && recs[0].po ? ' for PO ' + recs[0].po : ''));
 }
 
 async function deleteRecord(id) {
@@ -289,11 +287,9 @@ function init() {
     toast('Updated');
   });
 
-  // Edit / delete buttons in tables (event delegation)
+  // Delete buttons in tables (event delegation)
   document.getElementById('views').addEventListener('click', async e => {
-    const editBtn = e.target.closest('.row-edit');
     const delBtn = e.target.closest('.row-del');
-    if (editBtn) { editRecord(editBtn.dataset.edit); return; }
     if (delBtn) {
       const id = delBtn.dataset.del;
       const rec = STATE.rows.find(r => r._id === id);

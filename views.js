@@ -4,8 +4,10 @@
 const COLS = [
   ['pr', 'PR#'], ['prfDate', 'MRS/SRS Date'], ['prfReceived', 'MRS/SRS Received'],
   ['po', 'PO#'], ['poDate', 'PO Date'], ['vendor', 'Vendor'],
-  ['material', 'Material'], ['qty', 'Qty'], ['unit', 'Unit'], ['price', 'Price'],
-  ['total', 'Total'], ['project', 'Project'], ['status', 'Status'], ['paymentStatus', 'Payment']
+  ['material', 'Material'], ['qty', 'Qty'], ['unit', 'UOM'], ['price', 'Price'],
+  ['total', 'Total'], ['deliveredQty', 'Delivered Qty'], ['deliveredUnit', 'Del. UOM'],
+  ['balance', 'Balance to Deliver'],
+  ['project', 'Project'], ['status', 'Status'], ['paymentStatus', 'Payment']
 ];
 const DATE_KEYS = new Set(['poDate', 'prfDate', 'prfReceived', 'poDateNeeded', 'rfpDate', 'mrrDate', 'siDate', 'drDate', 'paidDate']);
 
@@ -84,12 +86,12 @@ function renderOrders() {
       else if (k === 'total' || k === 'price') v = num(v) ? pesoFull(v) : '';
       else if (k === 'status') return `<td class="px-3 py-2">${statusSelect(r)}</td>`;
       else if (k === 'paymentStatus') return `<td class="px-3 py-2">${paymentSelect(r)}</td>`;
+      else if (k === 'balance') v = (s(r.balance) !== '' && r.balance != null) ? r.balance : (num(r.qty) ? num(r.qty) - num(r.deliveredQty) : '');
       else v = s(v);
       const cls = (k === 'material' || k === 'vendor') ? 'max-w-[200px] truncate' : '';
       return `<td class="px-3 py-2 ${cls}" title="${s(r[k])}">${v}</td>`;
     }).join('')}
     <td class="px-3 py-2 whitespace-nowrap text-right">
-      <button data-edit="${r._id}" title="Edit" class="row-edit text-brand hover:text-brand-dark px-1.5">✏️</button>
       <button data-del="${r._id}" title="Delete" class="row-del text-red-500 hover:text-red-700 px-1.5">🗑️</button>
     </td>
   </tr>`).join('');
@@ -105,7 +107,7 @@ function renderOrders() {
           <thead class="bg-brand-pale text-brand-dark sticky top-0">
             <tr>${COLS.map(([, l]) => `<th class="px-3 py-2 text-left font-semibold">${l}</th>`).join('')}<th class="px-3 py-2 text-right font-semibold">Actions</th></tr>
           </thead>
-          <tbody>${body || '<tr><td class="px-3 py-6 text-center text-slate-400" colspan="15">No records</td></tr>'}</tbody>
+          <tbody>${body || '<tr><td class="px-3 py-6 text-center text-slate-400" colspan="18">No records</td></tr>'}</tbody>
         </table>
       </div>
     </div>`;
@@ -186,17 +188,6 @@ function renderDeliveries() {
     </div>`;
 }
 
-const FORM_FIELDS = [
-  ['pr', 'MRS/SRS Number'], ['prfDate', 'MRS/SRS Date'], ['prfReceived', 'MRS/SRS Date Received'],
-  ['po', 'PO#'], ['poDate', 'PO Date'], ['vendor', 'Vendor Name'],
-  ['material', 'Material Description'], ['qty', 'Quantity'], ['unit', 'Unit'],
-  ['price', 'Unit Price'], ['total', 'Total'], ['project', 'Project'],
-  ['department', 'Department'], ['terms', 'Terms'], ['status', 'Status'],
-  ['paymentStatus', 'Payment Processing Status'],
-  ['paidDate', 'Payment Date'],
-  ['remarks', 'Remarks']
-];
-
 function paymentPill(v) {
   const map = { paid: 'bg-green-100 text-green-700', partial: 'bg-blue-100 text-blue-700', hold: 'bg-red-100 text-red-700', pending: 'bg-amber-100 text-amber-700' };
   return `<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold ${map[paymentClass(v)]}">${s(v) || 'Pending Payment'}</span>`;
@@ -254,90 +245,6 @@ function renderPayment() {
     </div>`;
 }
 
-let editingId = null; // when set, the Add form edits this record instead of creating
-
-function editRecord(id) {
-  editingId = id;
-  setView('add');
-}
-
-function renderAdd() {
-  const editing = editingId ? STATE.rows.find(r => r._id === editingId) : null;
-  document.getElementById('views').innerHTML = `
-    <div class="card p-6 max-w-3xl">
-      <div class="text-sm font-bold text-brand-dark uppercase tracking-wide mb-1">${editing ? 'Edit' : 'Add'} Purchase Order Record</div>
-      <p class="text-xs text-slate-400 mb-5">${editing ? 'Update this record. Changes sync to the dataset.' : 'Manually input a record. It is added to the current dataset.'}</p>
-      <form id="addForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        ${FORM_FIELDS.map(([k, l]) => {
-          let field;
-          if (k === 'status') {
-            field = `<select name="${k}" class="w-full border border-slate-200 rounded-lg text-sm px-3 py-2 bg-white">
-                   ${STATUS_OPTIONS.map(o => `<option value="${o}">${o}</option>`).join('')}
-                 </select>`;
-          } else if (k === 'paymentStatus') {
-            field = `<select name="${k}" class="w-full border border-slate-200 rounded-lg text-sm px-3 py-2 bg-white">
-                   <option value="">— select —</option>
-                   ${PAYMENT_OPTIONS.map(o => `<option value="${o}">${o}</option>`).join('')}
-                 </select>`;
-          } else if (k === 'remarks') {
-            field = `<textarea name="${k}" rows="2" class="w-full border border-slate-200 rounded-lg text-sm px-3 py-2"></textarea>`;
-          } else if (DATE_KEYS.has(k)) {
-            field = `<input name="${k}" type="date" class="w-full border border-slate-200 rounded-lg text-sm px-3 py-2" />`;
-          } else {
-            field = `<input name="${k}" class="w-full border border-slate-200 rounded-lg text-sm px-3 py-2" />`;
-          }
-          return `<div class="${k === 'remarks' ? 'md:col-span-2' : ''}">
-            <label class="block text-xs font-medium text-slate-500 mb-1">${l}</label>
-            ${field}
-          </div>`;
-        }).join('')}
-        <div class="md:col-span-2 flex gap-3 pt-2">
-          <button type="submit" class="bg-brand hover:bg-brand-dark text-white text-sm font-semibold px-5 py-2.5 rounded-lg">${editing ? 'Update Record' : 'Add Record'}</button>
-          <button type="button" id="cancelEditBtn" class="border border-slate-200 text-slate-600 text-sm px-5 py-2.5 rounded-lg hover:bg-slate-50">${editing ? 'Cancel' : 'Clear'}</button>
-        </div>
-      </form>
-    </div>`;
-
-  const form = document.getElementById('addForm');
-
-  // prefill when editing
-  if (editing) {
-    FORM_FIELDS.forEach(([k]) => {
-      const el = form.elements[k];
-      if (!el) return;
-      let v = editing[k];
-      if (DATE_KEYS.has(k)) v = excelDate(v); // date inputs need yyyy-mm-dd
-      el.value = v == null ? '' : v;
-    });
-  }
-
-  document.getElementById('cancelEditBtn').addEventListener('click', () => {
-    if (editingId) { editingId = null; setView('orders'); }
-    else form.reset();
-  });
-
-  form.addEventListener('submit', async e => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const rec = {};
-    FORM_FIELDS.forEach(([k]) => (rec[k] = s(fd.get(k))));
-    if (!num(rec.total) && num(rec.qty) && num(rec.price)) rec.total = num(rec.qty) * num(rec.price);
-    if (!s(rec.po) && !s(rec.vendor) && !s(rec.material)) { toast('Please fill at least PO#, Vendor or Material'); return; }
-    try {
-      if (editingId) {
-        await updateRecord(editingId, rec);
-        editingId = null;
-        toast('Record updated');
-        setView('orders');
-      } else {
-        await addRecord(rec);
-        toast('Record added. Total records: ' + STATE.rows.length);
-        e.target.reset();
-      }
-    } catch (err) { toast('Failed: ' + err.message); }
-  });
-}
-
 function renderSettings() {
   const mode = DB && DB.mode === 'cloud' ? 'Cloud (Firebase - shared)' : 'Local (this browser only)';
   const who = (typeof CURRENT_USER !== 'undefined' && CURRENT_USER) ? `${CURRENT_USER.email} (${CURRENT_USER.role})` : 'not signed in';
@@ -371,5 +278,115 @@ function renderSettings() {
       if (typeof logActivity === 'function') logActivity('Clear data', 'All purchase order records cleared');
       toast('Data cleared');
     }
+  });
+}
+
+
+/* ===== Manual multi-row (spreadsheet-style) data entry ===== */
+const ENTRY_HEADER_FIELDS = [
+  ['pr', 'MRS/SRS Number'], ['prfDate', 'MRS/SRS Date'], ['prfReceived', 'MRS/SRS Date Received'],
+  ['po', 'PO#'], ['poDate', 'PO Date'], ['vendor', 'Vendor Name'],
+  ['project', 'Project'], ['department', 'Department'], ['terms', 'Terms'],
+  ['status', 'Status'], ['paymentStatus', 'Payment Processing Status'], ['paidDate', 'Payment Date'],
+  ['remarks', 'Remarks']
+];
+const GRID_COLS = [
+  ['material', 'Material Description'], ['qty', 'QTY'], ['unit', 'UOM'],
+  ['price', 'Price'], ['total', 'Total Price'], ['deliveredQty', 'PO Delivered Qty'], ['deliveredUnit', 'UOM'],
+  ['balance', 'Balance to Deliver']
+];
+
+function gridRowHtml() {
+  const inp = (n, w, ex, ph) => `<input name="${n}" placeholder="${ph || ''}" class="${ex || ''} ${w} border border-slate-200 rounded px-2 py-1.5 text-sm" />`;
+  return `<tr class="grid-row border-t border-slate-100">
+    <td class="p-1">${inp('material', 'w-full min-w-[200px]', '', 'Material description')}</td>
+    <td class="p-1">${inp('qty', 'w-16', 'grid-calc text-right')}</td>
+    <td class="p-1">${inp('unit', 'w-16', '', 'UOM')}</td>
+    <td class="p-1">${inp('price', 'w-24', 'grid-calc text-right')}</td>
+    <td class="p-1">${inp('total', 'w-28', 'grid-total text-right bg-slate-50', 'auto')}</td>
+    <td class="p-1">${inp('deliveredQty', 'w-24', 'grid-calc text-right')}</td>
+    <td class="p-1">${inp('deliveredUnit', 'w-16', '', 'UOM')}</td>
+    <td class="p-1">${inp('balance', 'w-24', 'grid-balance text-right bg-slate-50', 'auto')}</td>
+    <td class="p-1 text-center"><button type="button" class="grid-del text-red-500 hover:text-red-700 px-2 text-base" title="Remove row">✕</button></td>
+  </tr>`;
+}
+
+function renderAdd() {
+  const rows = [gridRowHtml(), gridRowHtml(), gridRowHtml()].join('');
+  document.getElementById('views').innerHTML = `
+    <div class="card p-6">
+      <div class="text-sm font-bold text-brand-dark uppercase tracking-wide mb-1">Add / Input Data</div>
+      <p class="text-xs text-slate-400 mb-5">Enter the shared PO details once, then add one or more material line items in the grid below. Any approved user can input multiple records at once.</p>
+      <form id="entryForm">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        ${ENTRY_HEADER_FIELDS.map(([k, l]) => {
+          let f;
+          if (k === 'status') f = `<select name="${k}" class="w-full border border-slate-200 rounded-lg text-sm px-3 py-2 bg-white">${STATUS_OPTIONS.map(o => `<option>${o}</option>`).join('')}</select>`;
+          else if (k === 'paymentStatus') f = `<select name="${k}" class="w-full border border-slate-200 rounded-lg text-sm px-3 py-2 bg-white"><option value="">— select —</option>${PAYMENT_OPTIONS.map(o => `<option>${o}</option>`).join('')}</select>`;
+          else if (k === 'remarks') f = `<textarea name="${k}" rows="2" class="w-full border border-slate-200 rounded-lg text-sm px-3 py-2"></textarea>`;
+          else if (DATE_KEYS.has(k)) f = `<input name="${k}" type="date" class="w-full border border-slate-200 rounded-lg text-sm px-3 py-2" />`;
+          else f = `<input name="${k}" class="w-full border border-slate-200 rounded-lg text-sm px-3 py-2" />`;
+          return `<div class="${k === 'remarks' ? 'md:col-span-3' : ''}"><label class="block text-xs font-medium text-slate-500 mb-1">${l}</label>${f}</div>`;
+        }).join('')}
+        </div>
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-xs font-bold text-brand-dark uppercase tracking-wide">Material Line Items</div>
+          <button type="button" id="addRowBtn" class="bg-brand-pale text-brand-dark text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-brand hover:text-white">+ Add Row</button>
+        </div>
+        <div class="overflow-auto border border-slate-100 rounded-lg">
+          <table class="w-full text-xs">
+            <thead class="bg-brand-pale text-brand-dark"><tr>
+              ${GRID_COLS.map(([, l]) => `<th class="px-2 py-2 text-left font-semibold">${l}</th>`).join('')}<th class="px-2 py-2"></th>
+            </tr></thead>
+            <tbody id="gridBody">${rows}</tbody>
+          </table>
+        </div>
+        <div class="flex gap-3 pt-5">
+          <button type="submit" class="bg-brand hover:bg-brand-dark text-white text-sm font-semibold px-5 py-2.5 rounded-lg">Save All Records</button>
+          <button type="button" id="clearGridBtn" class="border border-slate-200 text-slate-600 text-sm px-5 py-2.5 rounded-lg hover:bg-slate-50">Clear</button>
+        </div>
+      </form>
+    </div>`;
+
+  const form = document.getElementById('entryForm');
+  document.getElementById('addRowBtn').addEventListener('click', () => {
+    document.getElementById('gridBody').insertAdjacentHTML('beforeend', gridRowHtml());
+  });
+  form.addEventListener('click', e => {
+    const d = e.target.closest('.grid-del');
+    if (!d) return;
+    if (form.querySelectorAll('.grid-row').length > 1) d.closest('.grid-row').remove();
+    else toast('At least one row is required');
+  });
+  form.addEventListener('input', e => {
+    if (!e.target.classList.contains('grid-calc')) return;
+    const r = e.target.closest('.grid-row');
+    const q = num(r.querySelector('[name="qty"]').value);
+    const p = num(r.querySelector('[name="price"]').value);
+    const d = num(r.querySelector('[name="deliveredQty"]').value);
+    if (q && p) r.querySelector('.grid-total').value = (q * p).toFixed(2);
+    r.querySelector('.grid-balance').value = (q - d);
+  });
+  document.getElementById('clearGridBtn').addEventListener('click', () => renderAdd());
+
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const header = {};
+    ENTRY_HEADER_FIELDS.forEach(([k]) => (header[k] = s(form.elements[k].value)));
+    const recs = [];
+    form.querySelectorAll('.grid-row').forEach(tr => {
+      const line = {};
+      GRID_COLS.forEach(([k]) => (line[k] = s(tr.querySelector(`[name="${k}"]`).value)));
+      if (!s(line.material) && !num(line.qty) && !num(line.price)) return; // skip blank rows
+      if (!num(line.total) && num(line.qty) && num(line.price)) line.total = num(line.qty) * num(line.price);
+      if (s(line.balance) === '' && num(line.qty)) line.balance = num(line.qty) - num(line.deliveredQty);
+      recs.push(Object.assign({}, header, line));
+    });
+    if (!recs.length) { toast('Add at least one line item (material, qty or price)'); return; }
+    try {
+      await addRecords(recs);
+      toast('Saved ' + recs.length + ' record(s). Total: ' + STATE.rows.length);
+      renderAdd();
+    } catch (err) { toast('Failed: ' + err.message); }
   });
 }
