@@ -30,6 +30,7 @@ const HEADER_MAP = {
   'PO DELIVERED QTY': 'deliveredQty',
   'DELIVERED UOM': 'deliveredUnit',
   'BALANCE TO DELIVER': 'balance',
+  'PURCHASING AGENT': 'purchasingAgent',
   'TERMS': 'terms',
   'PROJECT': 'project',
   'DEPARTMENT': 'department',

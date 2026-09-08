@@ -7,6 +7,7 @@ const COLS = [
   ['material', 'Material'], ['qty', 'Qty'], ['unit', 'UOM'], ['price', 'Price'],
   ['total', 'Total'], ['deliveredQty', 'Delivered Qty'], ['deliveredUnit', 'Del. UOM'],
   ['balance', 'Balance to Deliver'],
+  ['purchasingAgent', 'Purchasing Agent'],
   ['project', 'Project'], ['status', 'Status'], ['paymentStatus', 'Payment']
 ];
 const DATE_KEYS = new Set(['poDate', 'prfDate', 'prfReceived', 'poDateNeeded', 'rfpDate', 'mrrDate', 'siDate', 'drDate', 'paidDate']);
@@ -26,6 +27,7 @@ function badge(status) {
 
 const STATUS_OPTIONS = ['ON-GOING', 'FOR DELIVERY', 'PARTIAL', 'SERVED', 'CANCELLED'];
 const PAYMENT_OPTIONS = ['Pending Payment', 'Partially Paid', 'Fully Paid', 'On Hold'];
+const AGENT_OPTIONS = ['Nhowei', 'Mark', 'Russel'];
 
 function paymentClass(v) {
   const t = s(v).toUpperCase();
@@ -107,7 +109,7 @@ function renderOrders() {
           <thead class="bg-brand-pale text-brand-dark sticky top-0">
             <tr>${COLS.map(([, l]) => `<th class="px-3 py-2 text-left font-semibold">${l}</th>`).join('')}<th class="px-3 py-2 text-right font-semibold">Actions</th></tr>
           </thead>
-          <tbody>${body || '<tr><td class="px-3 py-6 text-center text-slate-400" colspan="18">No records</td></tr>'}</tbody>
+          <tbody>${body || '<tr><td class="px-3 py-6 text-center text-slate-400" colspan="19">No records</td></tr>'}</tbody>
         </table>
       </div>
     </div>`;
@@ -287,6 +289,7 @@ const ENTRY_HEADER_FIELDS = [
   ['pr', 'MRS/SRS Number'], ['prfDate', 'MRS/SRS Date'], ['prfReceived', 'MRS/SRS Date Received'],
   ['po', 'PO#'], ['poDate', 'PO Date'], ['vendor', 'Vendor Name'],
   ['project', 'Project'], ['department', 'Department'], ['terms', 'Terms'],
+  ['purchasingAgent', 'Purchasing Agent'],
   ['status', 'Status'], ['paymentStatus', 'Payment Processing Status'], ['paidDate', 'Payment Date'],
   ['remarks', 'Remarks']
 ];
@@ -323,6 +326,7 @@ function renderAdd() {
           let f;
           if (k === 'status') f = `<select name="${k}" class="w-full border border-slate-200 rounded-lg text-sm px-3 py-2 bg-white">${STATUS_OPTIONS.map(o => `<option>${o}</option>`).join('')}</select>`;
           else if (k === 'paymentStatus') f = `<select name="${k}" class="w-full border border-slate-200 rounded-lg text-sm px-3 py-2 bg-white"><option value="">— select —</option>${PAYMENT_OPTIONS.map(o => `<option>${o}</option>`).join('')}</select>`;
+          else if (k === 'purchasingAgent') f = `<select name="${k}" class="w-full border border-slate-200 rounded-lg text-sm px-3 py-2 bg-white"><option value="">— select —</option>${AGENT_OPTIONS.map(o => `<option>${o}</option>`).join('')}</select>`;
           else if (k === 'remarks') f = `<textarea name="${k}" rows="2" class="w-full border border-slate-200 rounded-lg text-sm px-3 py-2"></textarea>`;
           else if (DATE_KEYS.has(k)) f = `<input name="${k}" type="date" class="w-full border border-slate-200 rounded-lg text-sm px-3 py-2" />`;
           else f = `<input name="${k}" class="w-full border border-slate-200 rounded-lg text-sm px-3 py-2" />`;
