@@ -142,6 +142,11 @@ function renderDashboard() {
       <div class="lg:col-span-2">${panel('MRS/SRS Received per Month', '<canvas id="mrsMonthChart" height="120"></canvas>')}</div>
       ${panel('MRS/SRS Received per Agent', '<canvas id="mrsAgentChart" height="180"></canvas>')}
     </div>
+
+    <!-- Row 6: total PO discount per month -->
+    <div class="grid grid-cols-1 gap-5">
+      ${panel('Total PO Discount per Month', '<canvas id="discountMonthChart" height="90"></canvas>')}
+    </div>
   `;
 
   destroyCharts();
@@ -151,6 +156,43 @@ function renderDashboard() {
   drawProjects(m);
   drawMrsMonthly(rows);
   drawMrsByAgent(rows);
+  drawDiscountMonthly(rows);
+}
+
+// Sum PO discount per month (counted once per PO#, by PO Date).
+function discountPerMonth(rows) {
+  const byMonth = {}; // 'YYYY-MM' -> { po# -> discount }
+  rows.forEach(r => {
+    if (!num(r.poDiscount)) return;
+    const d = excelDate(r.poDate);
+    if (!/^\d{4}-\d{2}-\d{2}/.test(d)) return;
+    const key = d.slice(0, 7);
+    const po = s(r.po) || ('row-' + (r._id || Math.random()));
+    byMonth[key] = byMonth[key] || {};
+    if (byMonth[key][po] === undefined) byMonth[key][po] = num(r.poDiscount);
+  });
+  return Object.keys(byMonth).sort().map(k => [k, Object.values(byMonth[k]).reduce((a, b) => a + b, 0)]);
+}
+
+function drawDiscountMonthly(rows) {
+  const ctx = document.getElementById('discountMonthChart');
+  if (!ctx) return;
+  const data = discountPerMonth(rows);
+  if (!data.length) {
+    ctx.parentElement.insertAdjacentHTML('beforeend', '<p class="text-sm text-slate-400 mt-2">No PO discount data available yet.</p>');
+    return;
+  }
+  CHARTS.discountMonth = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: data.map(d => monthLabel(d[0])),
+      datasets: [{ label: 'PO Discount', data: data.map(d => d[1]), backgroundColor: '#4caf7d', borderRadius: 6, maxBarThickness: 46 }]
+    },
+    options: {
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => pesoFull(c.parsed.y) } } },
+      scales: { y: { beginAtZero: true, grid: { color: '#f1f5f4' }, ticks: { callback: v => peso(v) } }, x: { grid: { display: false } } }
+    }
+  });
 }
 
 // Count distinct MRS/SRS numbers per purchasing agent.
