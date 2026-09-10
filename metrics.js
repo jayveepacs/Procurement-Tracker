@@ -137,9 +137,10 @@ function renderDashboard() {
       ${panel('Procurement Risk Status', riskPanel(m))}
     </div>
 
-    <!-- Row 5: MRS/SRS received per month -->
-    <div class="grid grid-cols-1 gap-5">
-      ${panel('MRS/SRS Received per Month', '<canvas id="mrsMonthChart" height="90"></canvas>')}
+    <!-- Row 5: MRS/SRS received per month + per agent -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div class="lg:col-span-2">${panel('MRS/SRS Received per Month', '<canvas id="mrsMonthChart" height="120"></canvas>')}</div>
+      ${panel('MRS/SRS Received per Agent', '<canvas id="mrsAgentChart" height="180"></canvas>')}
     </div>
   `;
 
@@ -149,6 +150,39 @@ function renderDashboard() {
   drawDelivery(m);
   drawProjects(m);
   drawMrsMonthly(rows);
+  drawMrsByAgent(rows);
+}
+
+// Count distinct MRS/SRS numbers per purchasing agent.
+function mrsPerAgent(rows) {
+  const byAgent = {}; // agent -> Set of MRS/SRS numbers
+  rows.forEach(r => {
+    const agent = s(r.purchasingAgent) || 'Unassigned';
+    (byAgent[agent] = byAgent[agent] || new Set()).add(s(r.pr) || ('row-' + (r._id || Math.random())));
+  });
+  return Object.entries(byAgent).map(([a, set]) => [a, set.size]).sort((x, y) => y[1] - x[1]);
+}
+
+function drawMrsByAgent(rows) {
+  const ctx = document.getElementById('mrsAgentChart');
+  if (!ctx) return;
+  const data = mrsPerAgent(rows);
+  if (!data.length) {
+    ctx.parentElement.insertAdjacentHTML('beforeend', '<p class="text-sm text-slate-400 mt-2">No data yet.</p>');
+    return;
+  }
+  CHARTS.mrsAgent = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: data.map(d => d[0]),
+      datasets: [{ label: 'MRS/SRS received', data: data.map(d => d[1]), backgroundColor: GREENS, borderRadius: 6, maxBarThickness: 46 }]
+    },
+    options: {
+      indexAxis: 'y',
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.parsed.x + ' MRS/SRS' } } },
+      scales: { x: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#f1f5f4' } }, y: { grid: { display: false } } }
+    }
+  });
 }
 
 // Count distinct MRS/SRS numbers received per month (by MRS/SRS Date Received).

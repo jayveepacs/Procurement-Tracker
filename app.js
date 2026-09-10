@@ -31,6 +31,7 @@ const HEADER_MAP = {
   'DELIVERED UOM': 'deliveredUnit',
   'BALANCE TO DELIVER': 'balance',
   'PURCHASING AGENT': 'purchasingAgent',
+  'PO DISCOUNT': 'poDiscount',
   'TERMS': 'terms',
   'PROJECT': 'project',
   'DEPARTMENT': 'department',

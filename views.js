@@ -3,7 +3,7 @@
 
 const COLS = [
   ['pr', 'PR#'], ['prfDate', 'MRS/SRS Date'], ['prfReceived', 'MRS/SRS Received'],
-  ['po', 'PO#'], ['poDate', 'PO Date'], ['vendor', 'Vendor'],
+  ['po', 'PO#'], ['poDiscount', 'PO Discount'], ['poDate', 'PO Date'], ['vendor', 'Vendor'],
   ['material', 'Material'], ['qty', 'Qty'], ['unit', 'UOM'], ['price', 'Price'],
   ['total', 'Total'], ['deliveredQty', 'Delivered Qty'], ['deliveredUnit', 'Del. UOM'],
   ['balance', 'Balance to Deliver'],
@@ -109,7 +109,7 @@ function renderOrders() {
           <thead class="bg-brand-pale text-brand-dark sticky top-0">
             <tr>${COLS.map(([, l]) => `<th class="px-3 py-2 text-left font-semibold">${l}</th>`).join('')}<th class="px-3 py-2 text-right font-semibold">Actions</th></tr>
           </thead>
-          <tbody>${body || '<tr><td class="px-3 py-6 text-center text-slate-400" colspan="19">No records</td></tr>'}</tbody>
+          <tbody>${body || '<tr><td class="px-3 py-6 text-center text-slate-400" colspan="20">No records</td></tr>'}</tbody>
         </table>
       </div>
     </div>`;
@@ -287,7 +287,7 @@ function renderSettings() {
 /* ===== Manual multi-row (spreadsheet-style) data entry ===== */
 const ENTRY_HEADER_FIELDS = [
   ['pr', 'MRS/SRS Number'], ['prfDate', 'MRS/SRS Date'], ['prfReceived', 'MRS/SRS Date Received'],
-  ['po', 'PO#'], ['poDate', 'PO Date'], ['vendor', 'Vendor Name'],
+  ['po', 'PO#'], ['poDiscount', 'PO Discount'], ['poDate', 'PO Date'], ['vendor', 'Vendor Name'],
   ['project', 'Project'], ['department', 'Department'], ['terms', 'Terms'],
   ['purchasingAgent', 'Purchasing Agent'],
   ['status', 'Status'], ['paymentStatus', 'Payment Processing Status'], ['paidDate', 'Payment Date'],
