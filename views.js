@@ -8,7 +8,8 @@ const COLS = [
   ['total', 'Total'], ['deliveredQty', 'Delivered Qty'], ['deliveredUnit', 'Del. UOM'],
   ['balance', 'Balance to Deliver'],
   ['purchasingAgent', 'Purchasing Agent'],
-  ['project', 'Project'], ['status', 'Status'], ['paymentStatus', 'Payment']
+  ['project', 'Project'], ['scope', 'Scope'], ['status', 'Status'], ['paymentStatus', 'Payment'],
+  ['rfp', 'RFP#']
 ];
 const DATE_KEYS = new Set(['poDate', 'prfDate', 'prfReceived', 'poDateNeeded', 'rfpDate', 'mrrDate', 'siDate', 'drDate', 'paidDate']);
 
@@ -78,7 +79,7 @@ function renderOrders() {
   const views = document.getElementById('views');
   let rows = currentRows();
   const q = ordersSearch.toLowerCase();
-  if (q) rows = rows.filter(r => [r.vendor, r.material, r.po, r.pr, r.project].some(v => s(v).toLowerCase().includes(q)));
+  if (q) rows = rows.filter(r => [r.vendor, r.material, r.po, r.pr, r.project, r.scope, r.rfp].some(v => s(v).toLowerCase().includes(q)));
   const shown = rows.slice(0, 500);
 
   const body = shown.map(r => `<tr class="border-t border-slate-100 hover:bg-slate-50">
@@ -102,14 +103,14 @@ function renderOrders() {
     <div class="card p-5">
       <div class="flex items-center justify-between mb-4 gap-4 flex-wrap">
         <div class="text-sm font-bold text-brand-dark uppercase tracking-wide">Purchase Orders <span class="text-slate-400 font-normal">(${rows.length.toLocaleString()} records${rows.length > 500 ? ', showing 500' : ''})</span></div>
-        <input id="ordersSearch" value="${ordersSearch}" placeholder="Search vendor, material, PO#..." class="border border-slate-200 rounded-lg text-sm px-3 py-2 w-72" />
+        <input id="ordersSearch" value="${ordersSearch}" placeholder="Search vendor, material, PO#, RFP#..." class="border border-slate-200 rounded-lg text-sm px-3 py-2 w-72" />
       </div>
       <div class="overflow-auto max-h-[70vh] border border-slate-100 rounded-lg">
         <table class="w-full text-xs">
           <thead class="bg-brand-pale text-brand-dark sticky top-0">
             <tr>${COLS.map(([, l]) => `<th class="px-3 py-2 text-left font-semibold">${l}</th>`).join('')}<th class="px-3 py-2 text-right font-semibold">Actions</th></tr>
           </thead>
-          <tbody>${body || '<tr><td class="px-3 py-6 text-center text-slate-400" colspan="20">No records</td></tr>'}</tbody>
+          <tbody>${body || `<tr><td class="px-3 py-6 text-center text-slate-400" colspan="${COLS.length + 1}">No records</td></tr>`}</tbody>
         </table>
       </div>
     </div>`;
