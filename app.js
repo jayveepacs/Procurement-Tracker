@@ -15,6 +15,7 @@ const HEADER_MAP = {
   'FAXED/ EMAILED DATE': 'faxedDate',
   'SUPPLIER LEAD TIME': 'leadTime',
   'CHECK DUE DATE  (BASED ON ACTUAL DELIVERY DATE)': 'checkDue',
+  'RFP#': 'rfp',
   'RFP #': 'rfp',
   'RFP DATE': 'rfpDate',
   'VENDOR CODE': 'vendorCode',
@@ -34,7 +35,8 @@ const HEADER_MAP = {
   'PO DISCOUNT': 'poDiscount',
   'TERMS': 'terms',
   'PROJECT': 'project',
-  'DEPARTMENT': 'department',
+  'DEPARTMENT': 'scope', // legacy header - older sheets still import into Scope
+  'SCOPE': 'scope',
   'DELIVERY ADDRESS': 'deliveryAddress',
   'INVOICE TO': 'invoiceTo',
   'ACTUAL PRR  DATE RECEIVED': 'prrReceived',
@@ -137,7 +139,7 @@ function handleFile(file) {
       if (!rows.length) { toast('No rows found in file'); return; }
       toast('Importing ' + rows.length + ' records...');
       await DB.replaceAll(rows, file.name);
-      STATE.rows = await DB.loadAll();
+      STATE.rows = migrateRows(await DB.loadAll());
       STATE.source = file.name;
       buildProjectFilter();
       render();
@@ -152,6 +154,16 @@ function handleFile(file) {
 }
 
 /* ---------- data operations (via DB repository) ---------- */
+// Back-compat: records saved before the Department -> Scope rename.
+function migrateRows(rows) {
+  rows.forEach(r => {
+    if (r.department === undefined) return;
+    if (s(r.scope) === '') r.scope = r.department;
+    delete r.department;
+  });
+  return rows;
+}
+
 async function addRecords(recs) {
   for (const rec of recs) {
     const id = await DB.add(rec);
@@ -179,7 +191,7 @@ function isAdminUser() {
 }
 
 async function boot() {
-  STATE.rows = await DB.loadAll();
+  STATE.rows = migrateRows(await DB.loadAll());
   buildProjectFilter();
   render();
 }

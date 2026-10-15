@@ -288,9 +288,10 @@ function renderSettings() {
 const ENTRY_HEADER_FIELDS = [
   ['pr', 'MRS/SRS Number'], ['prfDate', 'MRS/SRS Date'], ['prfReceived', 'MRS/SRS Date Received'],
   ['po', 'PO#'], ['poDiscount', 'PO Discount'], ['poDate', 'PO Date'], ['vendor', 'Vendor Name'],
-  ['project', 'Project'], ['department', 'Department'], ['terms', 'Terms'],
+  ['project', 'Project'], ['scope', 'Scope'], ['terms', 'Terms'],
   ['purchasingAgent', 'Purchasing Agent'],
   ['status', 'Status'], ['paymentStatus', 'Payment Processing Status'], ['paidDate', 'Payment Date'],
+  ['rfp', 'RFP#'],
   ['remarks', 'Remarks']
 ];
 const GRID_COLS = [

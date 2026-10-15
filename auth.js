@@ -316,6 +316,7 @@ function sampleData() {
   const materials = ['SAFETY SHOES', 'PVC PIPE 4"', 'PORTLAND CEMENT', 'REBAR 10mm', 'ELECTRICAL WIRE THHN', 'SLIDING WINDOW', 'PARACETAMOL', 'GRASS CUTTER'];
   const units = ['Piece', 'Bag', 'Length', 'Roll', 'Set'];
   const statuses = ['ON-GOING', 'FOR DELIVERY', 'PARTIAL', 'SERVED', 'CANCELLED'];
+  const scopes = ['CIVIL WORKS', 'ELECTRICAL', 'PLUMBING', 'FINISHES', 'SAFETY'];
   const rows = [];
   for (let i = 1; i <= 40; i++) {
     const qty = Math.ceil(Math.random() * 50);
@@ -329,7 +330,8 @@ function sampleData() {
       project: projects[i % projects.length],
       leadTime: Math.ceil(Math.random() * 70),
       status: statuses[Math.floor(Math.random() * statuses.length)],
-      department: 'PURCHASING'
+      scope: scopes[i % scopes.length],
+      rfp: 'RFP-' + (2000 + i)
     });
   }
   return rows;
@@ -338,7 +340,7 @@ function sampleData() {
 async function loadSampleData() {
   const rows = sampleData();
   await DB.replaceAll(rows, 'Sample Testing Data');
-  STATE.rows = await DB.loadAll();
+  STATE.rows = migrateRows(await DB.loadAll());
   buildProjectFilter();
   render();
   toast('Loaded ' + rows.length + ' sample records');
