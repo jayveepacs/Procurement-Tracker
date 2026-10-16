@@ -40,6 +40,31 @@ function paymentClass(v) {
   return 'pending';
 }
 
+// Escape for safe interpolation into an HTML attribute (quotes would break markup).
+function esc(v) {
+  return s(v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// Columns editable inline in the Purchase Orders table.
+const EDIT_COLS = {
+  rfp: { w: 'w-28' },
+  unit: { w: 'w-20' },
+  deliveredUnit: { w: 'w-20' },
+  deliveredQty: { w: 'w-20', numeric: true }
+};
+
+// Editable cell bound to a record's position in STATE.rows
+function editCell(record, key) {
+  const cfg = EDIT_COLS[key];
+  const idx = STATE.rows.indexOf(record);
+  const align = cfg.numeric ? 'text-right tabular-nums' : '';
+  const mode = cfg.numeric ? 'inputmode="decimal"' : '';
+  return `<input data-idx="${idx}" data-key="${key}" value="${esc(record[key])}" placeholder="—" ${mode}
+    title="Edit, then press Enter or click away"
+    class="edit-cell ${cfg.w} ${align} bg-transparent border border-transparent rounded px-2 py-1 text-xs outline-none
+           hover:border-slate-300 focus:border-brand focus:bg-white placeholder:text-slate-300" />`;
+}
+
 // Editable payment-status dropdown bound to a record's position in STATE.rows
 function paymentSelect(record) {
   const idx = STATE.rows.indexOf(record);
@@ -90,11 +115,16 @@ function renderOrders() {
     return `<tr class="group border-t border-slate-100 ${rowBg} hover:bg-brand-pale">
     ${COLS.map(([k], ci) => {
       let v = r[k];
+      let attr = '';
       if (DATE_KEYS.has(k)) v = excelDate(v);
       else if (k === 'total' || k === 'price') v = num(v) ? pesoFull(v) : '';
       else if (k === 'status') return `<td class="px-3 py-2">${statusSelect(r)}</td>`;
       else if (k === 'paymentStatus') return `<td class="px-3 py-2">${paymentSelect(r)}</td>`;
-      else if (k === 'balance') v = (s(r.balance) !== '' && r.balance != null) ? r.balance : (num(r.qty) ? num(r.qty) - num(r.deliveredQty) : '');
+      else if (EDIT_COLS[k]) return `<td class="px-3 py-2">${editCell(r, k)}</td>`;
+      else if (k === 'balance') {
+        v = (s(r.balance) !== '' && r.balance != null) ? r.balance : (num(r.qty) ? num(r.qty) - num(r.deliveredQty) : '');
+        attr = ` data-balance="${STATE.rows.indexOf(r)}"`; // refreshed in place on a Delivered Qty edit
+      }
       else v = s(v);
       let cls = (k === 'material' || k === 'vendor') ? 'max-w-[220px] truncate' : 'whitespace-nowrap';
       if (NUM_KEYS.has(k)) cls += ' text-right tabular-nums';
@@ -102,7 +132,7 @@ function renderOrders() {
       if (ci === 0) cls += ` sticky left-0 z-10 font-semibold text-brand-dark ${rowBg} group-hover:bg-brand-pale border-r border-slate-200`;
       // s(v) not falsiness: a real 0 qty/balance must still show as 0.
       const cell = s(v) === '' ? '<span class="text-slate-300">—</span>' : v;
-      return `<td class="px-3 py-2 ${cls}" title="${s(r[k])}">${cell}</td>`;
+      return `<td class="px-3 py-2 ${cls}"${attr} title="${esc(r[k])}">${cell}</td>`;
     }).join('')}
     <td class="px-3 py-2 whitespace-nowrap text-right">
       <button data-del="${r._id}" title="Delete" class="row-del text-red-500 hover:text-red-700 px-1.5">🗑️</button>

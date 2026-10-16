@@ -275,6 +275,37 @@ function init() {
 
   // Editable status / payment dropdowns (event delegation - #views persists across renders)
   document.getElementById('views').addEventListener('change', async e => {
+    // Inline cell edits (RFP#, UOM, Delivered Qty, Del. UOM). Fires on Enter/blur.
+    // Deliberately avoids render() so the table keeps its horizontal scroll position;
+    // the one derived column (Balance) is patched in place instead.
+    const box = e.target.closest('.edit-cell');
+    if (box) {
+      const i = parseInt(box.dataset.idx, 10);
+      const key = box.dataset.key;
+      if (isNaN(i) || !key || !STATE.rows[i]) return;
+      const rec = STATE.rows[i];
+      const newVal = s(box.value);
+      if (newVal === s(rec[key])) return; // nothing changed
+      const oldVal = s(rec[key]) || '(none)';
+      rec[key] = newVal;
+      const patch = { [key]: newVal };
+      // Balance to Deliver = qty - deliveredQty, but a stored balance wins at
+      // render time, so recompute and persist it or the column shows stale data.
+      if (key === 'deliveredQty') {
+        rec.balance = num(rec.qty) ? num(rec.qty) - num(newVal) : '';
+        patch.balance = rec.balance;
+      }
+      try { await DB.update(rec._id, patch); }
+      catch (err) { toast('Save failed: ' + err.message); return; }
+      if (key === 'deliveredQty') {
+        const cell = document.querySelector(`[data-balance="${i}"]`);
+        if (cell) cell.textContent = s(rec.balance) === '' ? '—' : rec.balance;
+      }
+      if (typeof logActivity === 'function') logActivity('Edit ' + key, (rec.po || rec.pr || 'record') + ': ' + oldVal + ' -> ' + (newVal || '(none)'));
+      toast('Updated');
+      return;
+    }
+
     const statusSel = e.target.closest('.status-select');
     const paySel = e.target.closest('.payment-select');
     const sel = statusSel || paySel;
