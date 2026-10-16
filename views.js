@@ -12,6 +12,8 @@ const COLS = [
   ['rfp', 'RFP#']
 ];
 const DATE_KEYS = new Set(['poDate', 'prfDate', 'prfReceived', 'poDateNeeded', 'rfpDate', 'mrrDate', 'siDate', 'drDate', 'paidDate']);
+// Right-aligned, tabular figures so amounts line up digit-for-digit.
+const NUM_KEYS = new Set(['qty', 'price', 'total', 'deliveredQty', 'balance', 'poDiscount']);
 
 let ordersSearch = '';
 
@@ -82,8 +84,11 @@ function renderOrders() {
   if (q) rows = rows.filter(r => [r.vendor, r.material, r.po, r.pr, r.project, r.scope, r.rfp].some(v => s(v).toLowerCase().includes(q)));
   const shown = rows.slice(0, 500);
 
-  const body = shown.map(r => `<tr class="border-t border-slate-100 hover:bg-slate-50">
-    ${COLS.map(([k]) => {
+  const body = shown.map((r, i) => {
+    // Opaque row background: the frozen first column sits on top of scrolling cells.
+    const rowBg = i % 2 ? 'bg-slate-50' : 'bg-white';
+    return `<tr class="group border-t border-slate-100 ${rowBg} hover:bg-brand-pale">
+    ${COLS.map(([k], ci) => {
       let v = r[k];
       if (DATE_KEYS.has(k)) v = excelDate(v);
       else if (k === 'total' || k === 'price') v = num(v) ? pesoFull(v) : '';
@@ -91,13 +96,19 @@ function renderOrders() {
       else if (k === 'paymentStatus') return `<td class="px-3 py-2">${paymentSelect(r)}</td>`;
       else if (k === 'balance') v = (s(r.balance) !== '' && r.balance != null) ? r.balance : (num(r.qty) ? num(r.qty) - num(r.deliveredQty) : '');
       else v = s(v);
-      const cls = (k === 'material' || k === 'vendor') ? 'max-w-[200px] truncate' : '';
-      return `<td class="px-3 py-2 ${cls}" title="${s(r[k])}">${v}</td>`;
+      let cls = (k === 'material' || k === 'vendor') ? 'max-w-[220px] truncate' : 'whitespace-nowrap';
+      if (NUM_KEYS.has(k)) cls += ' text-right tabular-nums';
+      if (DATE_KEYS.has(k)) cls += ' tabular-nums text-slate-500';
+      if (ci === 0) cls += ` sticky left-0 z-10 font-semibold text-brand-dark ${rowBg} group-hover:bg-brand-pale border-r border-slate-200`;
+      // s(v) not falsiness: a real 0 qty/balance must still show as 0.
+      const cell = s(v) === '' ? '<span class="text-slate-300">—</span>' : v;
+      return `<td class="px-3 py-2 ${cls}" title="${s(r[k])}">${cell}</td>`;
     }).join('')}
     <td class="px-3 py-2 whitespace-nowrap text-right">
       <button data-del="${r._id}" title="Delete" class="row-del text-red-500 hover:text-red-700 px-1.5">🗑️</button>
     </td>
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
 
   views.innerHTML = `
     <div class="card p-5">
@@ -106,9 +117,13 @@ function renderOrders() {
         <input id="ordersSearch" value="${ordersSearch}" placeholder="Search vendor, material, PO#, RFP#..." class="border border-slate-200 rounded-lg text-sm px-3 py-2 w-72" />
       </div>
       <div class="overflow-auto max-h-[70vh] border border-slate-100 rounded-lg">
-        <table class="w-full text-xs">
-          <thead class="bg-brand-pale text-brand-dark sticky top-0">
-            <tr>${COLS.map(([, l]) => `<th class="px-3 py-2 text-left font-semibold">${l}</th>`).join('')}<th class="px-3 py-2 text-right font-semibold">Actions</th></tr>
+        <table class="min-w-max text-xs">
+          <thead class="bg-brand-pale text-brand-dark sticky top-0 z-20">
+            <tr>${COLS.map(([k, l], ci) => {
+              let hc = 'px-3 py-2 font-semibold whitespace-nowrap ' + (NUM_KEYS.has(k) ? 'text-right' : 'text-left');
+              if (ci === 0) hc += ' sticky left-0 z-30 bg-brand-pale border-r border-slate-200';
+              return `<th class="${hc}">${l}</th>`;
+            }).join('')}<th class="px-3 py-2 text-right font-semibold whitespace-nowrap">Actions</th></tr>
           </thead>
           <tbody>${body || `<tr><td class="px-3 py-6 text-center text-slate-400" colspan="${COLS.length + 1}">No records</td></tr>`}</tbody>
         </table>
